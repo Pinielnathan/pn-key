@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from . import audio_ops, effects
 from .config import ALLOWED_ORIGINS, MAX_UPLOAD_BYTES, STORAGE_DIR
@@ -21,7 +21,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_SAFE_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aiff", ".wma"}
+_SAFE_EXTENSIONS = {
+    ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aiff", ".wma",
+    ".webm", ".mp4",  # browser MediaRecorder output (mic recordings)
+}
 
 
 def _safe_suffix(filename: str | None) -> str:
@@ -53,8 +56,7 @@ def _run_retune(
     try:
         job.status = "processing"
         output_path = job.dir / "output.wav"
-        audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
-        job.outputs["output"] = output_path
+        job.outputs["output"] = audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -64,9 +66,7 @@ def _run_retune(
 def _run_separate(job: Job, input_path: Path) -> None:
     try:
         job.status = "processing"
-        vocals_path, instrumental_path = audio_ops.separate(input_path, job.dir / "stems")
-        job.outputs["vocals"] = vocals_path
-        job.outputs["instrumental"] = instrumental_path
+        job.outputs.update(audio_ops.separate(input_path, job.dir / "stems"))
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -77,8 +77,7 @@ def _run_effect(job: Job, input_path: Path, preset_slug: str) -> None:
     try:
         job.status = "processing"
         output_path = job.dir / "output.wav"
-        audio_ops.apply_effect(input_path, output_path, preset_slug)
-        job.outputs["output"] = output_path
+        job.outputs["output"] = audio_ops.apply_effect(input_path, output_path, preset_slug)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -135,6 +134,23 @@ async def list_effect_presets():
     return {"presets": effects.list_presets(), "categories": effects.list_categories()}
 
 
+@app.post("/api/effects/preview")
+async def preview_effect(file: UploadFile = File(...), preset: str = Form(...)):
+    available = {p["slug"] for p in effects.list_presets()}
+    if preset not in available:
+        raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
+
+    with tempfile.TemporaryDirectory(dir=STORAGE_DIR) as tmp_dir:
+        input_path = Path(tmp_dir) / f"input{_safe_suffix(file.filename)}"
+        await _save_upload(file, input_path)
+        try:
+            mp3_bytes = audio_ops.preview_effect(input_path, preset)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail=f"Could not generate preview: {exc}") from exc
+
+    return Response(content=mp3_bytes, media_type="audio/mpeg")
+
+
 @app.post("/api/jobs/effects")
 async def create_effect_job(
     background_tasks: BackgroundTasks,
@@ -168,14 +184,18 @@ async def job_status(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/download/{stem}")
-async def download_output(job_id: str, stem: str):
+async def download_output(job_id: str, stem: str, format: str = "wav"):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    path = job.outputs.get(stem)
-    if path is None or not path.exists():
+    formats = job.outputs.get(stem)
+    if not formats:
         raise HTTPException(status_code=404, detail="Output not ready")
-    return FileResponse(path, filename=f"{stem}{path.suffix}", media_type="audio/wav")
+    path = formats.get(format)
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail=f"Format '{format}' not available")
+    media_type = "audio/mpeg" if format == "mp3" else "audio/wav"
+    return FileResponse(path, filename=f"{stem}.{format}", media_type=media_type)
 
 
 @app.get("/api/health")

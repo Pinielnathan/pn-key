@@ -3,19 +3,27 @@ import {
   downloadUrl,
   fetchEffectPresets,
   pollJobUntilDone,
+  previewEffect,
   submitEffectJob,
   type EffectCategory,
   type EffectPreset,
 } from "../lib/api";
-import { FileDrop } from "./FileDrop";
+import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
 
-type Stage = "idle" | "uploading" | "processing" | "done" | "error";
+type ItemStatus = "queued" | "processing" | "done" | "error";
 
 const PAGE_SIZE = 9;
 
 interface EffectsPresetData {
   preset?: string;
+}
+
+interface ResultItem {
+  file: File;
+  status: ItemStatus;
+  jobId: string | null;
+  error: string | null;
 }
 
 export function EffectsPanel() {
@@ -26,10 +34,12 @@ export function EffectsPanel() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [file, setFile] = useState<File | null>(null);
-  const [stage, setStage] = useState<Stage>("idle");
+  const [files, setFiles] = useState<File[]>([]);
+  const [results, setResults] = useState<ResultItem[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   useEffect(() => {
     fetchEffectPresets()
@@ -39,6 +49,13 @@ export function EffectsPanel() {
         setSelectedPreset((current) => current ?? list[0]?.slug ?? null);
       })
       .catch((err) => setPresetsError(err instanceof Error ? err.message : "Couldn't load presets"));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredPresets = useMemo(() => {
@@ -67,8 +84,33 @@ export function EffectsPanel() {
     setPage(1);
   }
 
-  const canSubmit =
-    file !== null && selectedPreset !== null && stage !== "uploading" && stage !== "processing";
+  function selectPreset(slug: string) {
+    setSelectedPreset(slug);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  }
+
+  async function handlePreview() {
+    const sampleFile = files[0];
+    if (!sampleFile || !selectedPreset) return;
+    setError(null);
+    setIsPreviewing(true);
+    try {
+      const blob = await previewEffect(sampleFile, selectedPreset);
+      setPreviewUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return URL.createObjectURL(blob);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't generate a preview.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  }
+
+  const canSubmit = files.length > 0 && selectedPreset !== null && !isRunning;
 
   function getPresetData(): EffectsPresetData {
     return { preset: selectedPreset ?? undefined };
@@ -76,31 +118,43 @@ export function EffectsPanel() {
 
   function loadPresetData(data: EffectsPresetData) {
     if (typeof data.preset === "string" && presets.some((p) => p.slug === data.preset)) {
-      setSelectedPreset(data.preset);
+      selectPreset(data.preset);
     } else {
       setError("That preset file names an effect that isn't available here.");
     }
   }
 
-  async function handleSubmit() {
-    if (!file || !selectedPreset) return;
-    setError(null);
-    setStage("uploading");
+  async function runOne(file: File, preset: string, index: number) {
     try {
-      const { job_id } = await submitEffectJob(file, selectedPreset);
-      setJobId(job_id);
-      setStage("processing");
+      const { job_id } = await submitEffectJob(file, preset);
+      setResults((prev) => prev.map((r, i) => (i === index ? { ...r, jobId: job_id, status: "processing" } : r)));
       const finalStatus = await pollJobUntilDone(job_id, () => {});
-      if (finalStatus.status === "error") {
-        setError(finalStatus.error ?? "Processing failed");
-        setStage("error");
-      } else {
-        setStage("done");
-      }
+      setResults((prev) =>
+        prev.map((r, i) =>
+          i === index
+            ? finalStatus.status === "error"
+              ? { ...r, status: "error", error: finalStatus.error ?? "Processing failed" }
+              : { ...r, status: "done" }
+            : r,
+        ),
+      );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setStage("error");
+      setResults((prev) =>
+        prev.map((r, i) =>
+          i === index ? { ...r, status: "error", error: err instanceof Error ? err.message : "Something went wrong" } : r,
+        ),
+      );
     }
+  }
+
+  async function handleSubmit() {
+    if (files.length === 0 || !selectedPreset) return;
+    setError(null);
+    const initial: ResultItem[] = files.map((file) => ({ file, status: "queued", jobId: null, error: null }));
+    setResults(initial);
+    setIsRunning(true);
+    await Promise.all(files.map((file, index) => runOne(file, selectedPreset, index)));
+    setIsRunning(false);
   }
 
   return (
@@ -108,11 +162,12 @@ export function EffectsPanel() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-100">Voice effects</h2>
         <p className="text-sm text-zinc-400">
-          Upload a vocal, pick from {presets.length || 30} presets, and download the processed result.
+          Upload one or more vocals, pick from {presets.length || 30} presets, and download the processed
+          result.
         </p>
       </div>
 
-      <FileDrop label="Vocal audio file" file={file} onFileSelected={setFile} />
+      <MultiFileDrop label="Vocal audio file(s)" files={files} onFilesChange={setFiles} />
 
       {presetsError && <p className="text-sm text-red-400">{presetsError}</p>}
 
@@ -146,7 +201,7 @@ export function EffectsPanel() {
         {pagePresets.map((preset) => (
           <button
             key={preset.slug}
-            onClick={() => setSelectedPreset(preset.slug)}
+            onClick={() => selectPreset(preset.slug)}
             title={preset.description}
             className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
               selectedPreset === preset.slug
@@ -182,6 +237,20 @@ export function EffectsPanel() {
         </div>
       )}
 
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handlePreview}
+          disabled={files.length === 0 || !selectedPreset || isPreviewing}
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isPreviewing ? "Rendering preview…" : "Preview"}
+        </button>
+        <span className="text-xs text-zinc-500">
+          Quick sample from the first {files.length > 1 ? "file" : "upload"}, not the full render.
+        </span>
+      </div>
+      {previewUrl && <audio controls autoPlay src={previewUrl} className="w-full" />}
+
       <PresetControls
         filename="pnkey-effect-preset.json"
         getData={getPresetData}
@@ -194,22 +263,44 @@ export function EffectsPanel() {
         disabled={!canSubmit}
         className="w-full rounded-md bg-brand-lime px-4 py-2 font-semibold text-ink-950 transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500"
       >
-        {stage === "uploading" || stage === "processing" ? "Applying…" : "Apply effect"}
+        {isRunning ? "Applying…" : files.length > 1 ? `Apply to ${files.length} files` : "Apply effect"}
       </button>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {stage === "done" && jobId && (
-        <div className="space-y-2 rounded-md border border-zinc-700 bg-ink-900 p-4">
-          <p className="text-sm text-brand-lime">Done! Preview and download below.</p>
-          <audio controls src={downloadUrl(jobId, "output")} className="w-full" />
-          <a
-            href={downloadUrl(jobId, "output")}
-            download
-            className="inline-block rounded-md bg-ink-800 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-          >
-            Download
-          </a>
+      {results.length > 0 && (
+        <div className="space-y-3">
+          {results.map((result, i) => (
+            <div key={`${result.file.name}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
+              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.file.name}</p>
+
+              {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
+              {result.status === "processing" && <p className="text-sm text-zinc-400">Applying…</p>}
+              {result.status === "error" && <p className="text-sm text-red-400">{result.error}</p>}
+
+              {result.status === "done" && result.jobId && (
+                <div className="space-y-2">
+                  <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
+                  <div className="flex gap-2">
+                    <a
+                      href={downloadUrl(result.jobId, "output", "wav")}
+                      download
+                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
+                    >
+                      WAV
+                    </a>
+                    <a
+                      href={downloadUrl(result.jobId, "output", "mp3")}
+                      download
+                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
+                    >
+                      MP3
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

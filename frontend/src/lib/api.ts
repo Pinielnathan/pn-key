@@ -105,13 +105,37 @@ export async function submitEffectJob(file: File, preset: string): Promise<{ job
   return parseJsonOrThrow(res);
 }
 
+export async function previewEffect(file: File, preset: string): Promise<Blob> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("preset", preset);
+
+  const res = await fetch(`${API_BASE}/api/effects/preview`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      // response wasn't JSON — fall back to statusText
+    }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   const res = await fetch(`${API_BASE}/api/jobs/${jobId}`);
   return parseJsonOrThrow(res);
 }
 
-export function downloadUrl(jobId: string, stem: string): string {
-  return `${API_BASE}/api/jobs/${jobId}/download/${stem}`;
+export type AudioFormat = "wav" | "mp3";
+
+export function downloadUrl(jobId: string, stem: string, format: AudioFormat = "wav"): string {
+  return `${API_BASE}/api/jobs/${jobId}/download/${stem}?format=${format}`;
 }
 
 export async function pollJobUntilDone(

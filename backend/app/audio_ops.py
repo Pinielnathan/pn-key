@@ -4,10 +4,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import lameenc
 import librosa
 import numpy as np
 import soundfile as sf
 from mutagen.id3 import TBPM, TIT2, TKEY
+from mutagen.mp3 import MP3
 from mutagen.wave import WAVE
 
 from . import effects
@@ -20,6 +22,7 @@ _MINOR_PROFILE = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98,
 _NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 ANALYZE_DURATION_SECONDS = 60.0
+PREVIEW_DURATION_SECONDS = 8.0
 
 
 def _estimate_key(chroma_mean: np.ndarray) -> tuple[int, bool]:
@@ -54,20 +57,59 @@ def analyze(input_path: Path) -> dict:
     return {"bpm": round(bpm, 1), "key_index": key_index, "key_name": key_name(key_index, is_minor)}
 
 
+def _write_id3_tags(mutagen_file, bpm: float, key_name_str: str, title: str) -> None:
+    if mutagen_file.tags is None:
+        mutagen_file.add_tags()
+    mutagen_file.tags.add(TBPM(encoding=3, text=[str(round(bpm))]))
+    mutagen_file.tags.add(TKEY(encoding=3, text=[key_name_str]))
+    mutagen_file.tags.add(TIT2(encoding=3, text=[title]))
+    mutagen_file.save()
+
+
 def embed_metadata(path: Path, bpm: float, key_name_str: str, title: str = "PN Key") -> None:
-    """Writes BPM/key as standard ID3 TBPM/TKEY frames — the same tags DJ software reads."""
-    audio = WAVE(str(path))
-    if audio.tags is None:
-        audio.add_tags()
-    audio.tags.add(TBPM(encoding=3, text=[str(round(bpm))]))
-    audio.tags.add(TKEY(encoding=3, text=[key_name_str]))
-    audio.tags.add(TIT2(encoding=3, text=[title]))
-    audio.save()
+    """Writes BPM/key as standard ID3 TBPM/TKEY frames on a WAV file — the same tags DJ software reads."""
+    _write_id3_tags(WAVE(str(path)), bpm, key_name_str, title)
 
 
-def _tag_with_detected_metadata(path: Path, title: str) -> None:
-    result = analyze(path)
-    embed_metadata(path, result["bpm"], result["key_name"], title=title)
+def embed_metadata_mp3(path: Path, bpm: float, key_name_str: str, title: str = "PN Key") -> None:
+    """Same tags as embed_metadata, for an MP3 file."""
+    _write_id3_tags(MP3(str(path)), bpm, key_name_str, title)
+
+
+def encode_mp3(audio: np.ndarray, sample_rate: int, bit_rate: int = 192) -> bytes:
+    """audio: float32 array shaped (channels, samples), range [-1, 1]."""
+    if audio.ndim == 1:
+        audio = audio[np.newaxis, :]
+    channels = audio.shape[0]
+    interleaved = np.clip(audio.T, -1.0, 1.0)
+    pcm16 = (interleaved * 32767.0).astype("<i2")
+
+    encoder = lameenc.Encoder()
+    encoder.silence()
+    encoder.set_bit_rate(bit_rate)
+    encoder.set_in_sample_rate(sample_rate)
+    encoder.set_channels(channels)
+    encoder.set_quality(2)
+    data = bytes(encoder.encode(pcm16.tobytes())) + bytes(encoder.flush())
+    return data
+
+
+def _write_wav_and_mp3(
+    audio: np.ndarray,
+    sample_rate: int,
+    wav_path: Path,
+    title: str,
+) -> dict[str, Path]:
+    """Writes a WAV, detects its BPM/key, tags both a WAV and an MP3 sibling with it."""
+    sf.write(str(wav_path), audio.T, sample_rate)
+    detected = analyze(wav_path)
+    embed_metadata(wav_path, detected["bpm"], detected["key_name"], title=title)
+
+    mp3_path = wav_path.with_suffix(".mp3")
+    mp3_path.write_bytes(encode_mp3(audio, sample_rate))
+    embed_metadata_mp3(mp3_path, detected["bpm"], detected["key_name"], title=title)
+
+    return {"wav": wav_path, "mp3": mp3_path}
 
 
 def retune(
@@ -76,7 +118,7 @@ def retune(
     source_bpm: float,
     target_bpm: float,
     semitone_shift: float,
-) -> None:
+) -> dict[str, Path]:
     """Time-stretch audio from source_bpm to target_bpm, then pitch-shift by semitone_shift."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False)
     if y.ndim == 1:
@@ -95,12 +137,11 @@ def retune(
         channels.append(shifted)
 
     out = np.stack(channels, axis=0)
-    sf.write(str(output_path), out.T, sr)
-    _tag_with_detected_metadata(output_path, title="PN Key - Retuned vocal")
+    return _write_wav_and_mp3(out, sr, output_path, title="PN Key - Retuned vocal")
 
 
-def separate(input_path: Path, out_dir: Path) -> tuple[Path, Path]:
-    """Run Demucs two-stem separation. Returns (vocals_path, instrumental_path)."""
+def separate(input_path: Path, out_dir: Path) -> dict[str, dict[str, Path]]:
+    """Run Demucs two-stem separation. Returns {"vocals": {...}, "instrumental": {...}}."""
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
@@ -127,19 +168,48 @@ def separate(input_path: Path, out_dir: Path) -> tuple[Path, Path]:
 
     # Both stems share one song's tempo/key — detect once on the instrumental
     # (fuller harmonic/rhythmic content, more reliable than isolated vocals)
-    # and tag both files with it.
+    # and tag both files (and their MP3 siblings) with it.
     detected = analyze(instrumental_path)
+
+    vocals_audio, sr = sf.read(str(vocals_path), dtype="float32")
+    instrumental_audio, _ = sf.read(str(instrumental_path), dtype="float32")
+    if vocals_audio.ndim == 1:
+        vocals_audio = vocals_audio[:, np.newaxis]
+    if instrumental_audio.ndim == 1:
+        instrumental_audio = instrumental_audio[:, np.newaxis]
+
     embed_metadata(vocals_path, detected["bpm"], detected["key_name"], title="PN Key - Vocals")
     embed_metadata(instrumental_path, detected["bpm"], detected["key_name"], title="PN Key - Instrumental")
-    return vocals_path, instrumental_path
+
+    vocals_mp3 = vocals_path.with_suffix(".mp3")
+    vocals_mp3.write_bytes(encode_mp3(vocals_audio.T, sr))
+    embed_metadata_mp3(vocals_mp3, detected["bpm"], detected["key_name"], title="PN Key - Vocals")
+
+    instrumental_mp3 = instrumental_path.with_suffix(".mp3")
+    instrumental_mp3.write_bytes(encode_mp3(instrumental_audio.T, sr))
+    embed_metadata_mp3(instrumental_mp3, detected["bpm"], detected["key_name"], title="PN Key - Instrumental")
+
+    return {
+        "vocals": {"wav": vocals_path, "mp3": vocals_mp3},
+        "instrumental": {"wav": instrumental_path, "mp3": instrumental_mp3},
+    }
 
 
-def apply_effect(input_path: Path, output_path: Path, preset_slug: str) -> None:
-    """Runs a named pedalboard preset over the upload and writes a tagged WAV."""
+def apply_effect(input_path: Path, output_path: Path, preset_slug: str) -> dict[str, Path]:
+    """Runs a named pedalboard preset over the upload and writes tagged WAV + MP3 outputs."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False)
     if y.ndim == 1:
         y = y[np.newaxis, :]
 
     processed = effects.apply_preset(preset_slug, y.astype(np.float32), sr)
-    sf.write(str(output_path), processed.T, sr)
-    _tag_with_detected_metadata(output_path, title="PN Key - Effect")
+    return _write_wav_and_mp3(processed, sr, output_path, title="PN Key - Effect")
+
+
+def preview_effect(input_path: Path, preset_slug: str) -> bytes:
+    """Fast, short (few-second) MP3 preview of a preset — no job queue, no persistence."""
+    y, sr = librosa.load(str(input_path), sr=None, mono=False, duration=PREVIEW_DURATION_SECONDS)
+    if y.ndim == 1:
+        y = y[np.newaxis, :]
+
+    processed = effects.apply_preset(preset_slug, y.astype(np.float32), sr)
+    return encode_mp3(processed, sr, bit_rate=128)

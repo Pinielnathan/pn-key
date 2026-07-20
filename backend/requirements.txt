@@ -9,3 +9,4 @@ torch==2.3.1
 torchaudio==2.3.1
 pedalboard==0.9.24
 mutagen==1.48.1
+lameenc==1.8.4
