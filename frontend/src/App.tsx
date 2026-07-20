@@ -45,7 +45,34 @@ export default function App() {
       {tab === "separate" && <SeparatePanel />}
       {tab === "effects" && <EffectsPanel />}
 
-      <footer className="mt-12 text-xs text-zinc-600">Only upload audio you have the rights to process.</footer>
+      <footer className="mt-12 border-t border-zinc-800 pt-6 text-xs text-zinc-500">
+        <p>Only upload audio you have the rights to process.</p>
+        <p className="mt-3">
+          Built by{" "}
+          <a
+            href="https://chitemere.co.zw"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-400 hover:text-brand-lime"
+          >
+            Piniel Chitemere
+          </a>
+          . Questions, feedback, or want to collaborate?{" "}
+          <a href="mailto:pinielchitemere10@gmail.com" className="text-zinc-400 hover:text-brand-lime">
+            Email me
+          </a>{" "}
+          or find me on{" "}
+          <a
+            href="https://instagram.com/piniel_nathan1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-400 hover:text-brand-lime"
+          >
+            Instagram
+          </a>
+          .
+        </p>
+      </footer>
     </div>
   );
 }
