@@ -17,6 +17,7 @@ class Job:
     error: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     outputs: dict = field(default_factory=dict)  # stem name -> Path
+    metadata: dict = field(default_factory=dict)  # stem name -> {"bpm", "key_name", "title"}
     dir: Path = field(init=False)
 
     def __post_init__(self) -> None:

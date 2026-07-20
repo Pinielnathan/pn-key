@@ -99,7 +99,7 @@ def _write_wav_and_mp3(
     sample_rate: int,
     wav_path: Path,
     title: str,
-) -> dict[str, Path]:
+) -> tuple[dict[str, Path], dict]:
     """Writes a WAV, detects its BPM/key, tags both a WAV and an MP3 sibling with it."""
     sf.write(str(wav_path), audio.T, sample_rate)
     detected = analyze(wav_path)
@@ -109,7 +109,7 @@ def _write_wav_and_mp3(
     mp3_path.write_bytes(encode_mp3(audio, sample_rate))
     embed_metadata_mp3(mp3_path, detected["bpm"], detected["key_name"], title=title)
 
-    return {"wav": wav_path, "mp3": mp3_path}
+    return {"wav": wav_path, "mp3": mp3_path}, {**detected, "title": title}
 
 
 def _time_stretch_and_shift(y: np.ndarray, sr: int, rate: float, semitone_shift: float) -> np.ndarray:
@@ -131,7 +131,7 @@ def retune(
     source_bpm: float,
     target_bpm: float,
     semitone_shift: float,
-) -> dict[str, Path]:
+) -> tuple[dict[str, Path], dict]:
     """Time-stretch audio from source_bpm to target_bpm, then pitch-shift by semitone_shift."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False)
     if y.ndim == 1:
@@ -153,7 +153,7 @@ def preview_retune(input_path: Path, source_bpm: float, target_bpm: float, semit
     return encode_mp3(processed, sr, bit_rate=128)
 
 
-def separate(input_path: Path, out_dir: Path) -> dict[str, dict[str, Path]]:
+def separate(input_path: Path, out_dir: Path) -> tuple[dict[str, dict[str, Path]], dict[str, dict]]:
     """Run Demucs two-stem separation. Returns {"vocals": {...}, "instrumental": {...}}."""
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -202,13 +202,18 @@ def separate(input_path: Path, out_dir: Path) -> dict[str, dict[str, Path]]:
     instrumental_mp3.write_bytes(encode_mp3(instrumental_audio.T, sr))
     embed_metadata_mp3(instrumental_mp3, detected["bpm"], detected["key_name"], title="PN Key - Instrumental")
 
-    return {
+    outputs = {
         "vocals": {"wav": vocals_path, "mp3": vocals_mp3},
         "instrumental": {"wav": instrumental_path, "mp3": instrumental_mp3},
     }
+    metadata = {
+        "vocals": {**detected, "title": "PN Key - Vocals"},
+        "instrumental": {**detected, "title": "PN Key - Instrumental"},
+    }
+    return outputs, metadata
 
 
-def apply_effect(input_path: Path, output_path: Path, preset_slugs: list[str]) -> dict[str, Path]:
+def apply_effect(input_path: Path, output_path: Path, preset_slugs: list[str]) -> tuple[dict[str, Path], dict]:
     """Runs one or more chained pedalboard presets over the upload, writes tagged WAV + MP3 outputs."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False)
     if y.ndim == 1:

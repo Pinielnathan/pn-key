@@ -1,0 +1,15 @@
+{
+  "name": "PN Key",
+  "short_name": "PN Key",
+  "description": "Retune vocals, split songs into stems, or apply voice effects, with BPM/key metadata on every download.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08090a",
+  "theme_color": "#08090a",
+  "icons": [
+    { "src": "/logo-mark-48.png", "sizes": "48x48", "type": "image/png" },
+    { "src": "/logo-mark-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo-mark-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

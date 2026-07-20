@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EffectsPanel } from "./components/EffectsPanel";
 import { RetunePanel } from "./components/RetunePanel";
 import { SeparatePanel } from "./components/SeparatePanel";
+import { loadFile, saveFile } from "./lib/fileStore";
+import { useLocalStorageState } from "./lib/useLocalStorageState";
 
 type Tab = "retune" | "separate" | "effects";
 
@@ -11,9 +13,24 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "effects", label: "Effects" },
 ];
 
+const LAST_RECORDING_KEY = "pnkey:lastRecording";
+
 export default function App() {
-  const [tab, setTab] = useState<Tab>("retune");
-  const [lastRecording, setLastRecording] = useState<File | null>(null);
+  const [tab, setTab] = useLocalStorageState<Tab>("pnkey:tab", "retune");
+  const [lastRecording, setLastRecordingState] = useState<File | null>(null);
+
+  useEffect(() => {
+    loadFile(LAST_RECORDING_KEY)
+      .then((file) => {
+        if (file) setLastRecordingState(file);
+      })
+      .catch(() => {});
+  }, []);
+
+  function setLastRecording(file: File) {
+    setLastRecordingState(file);
+    saveFile(LAST_RECORDING_KEY, file).catch(() => {});
+  }
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-4 py-6 sm:py-10">

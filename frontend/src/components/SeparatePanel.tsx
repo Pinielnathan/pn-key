@@ -1,25 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { downloadUrl, pollJobUntilDone, submitSeparateJob } from "../lib/api";
+import { downloadAllAsZip } from "../lib/downloadZip";
+import { loadFiles, saveFiles } from "../lib/fileStore";
+import { useResumableResults } from "../lib/useResumableResults";
 import { MultiFileDrop } from "./MultiFileDrop";
-
-type ItemStatus = "queued" | "processing" | "done" | "error";
-
-interface ResultItem {
-  file: File;
-  status: ItemStatus;
-  jobId: string | null;
-  error: string | null;
-}
 
 interface SeparatePanelProps {
   lastRecording: File | null;
   onRecorded: (file: File) => void;
 }
 
+const FILES_KEY = "pnkey:separate:files";
+
 export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps) {
   const [files, setFiles] = useState<File[]>([]);
-  const [results, setResults] = useState<ResultItem[]>([]);
+  const [results, setResults] = useResumableResults("pnkey:separate:results");
   const [isRunning, setIsRunning] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadFiles(FILES_KEY)
+      .then((stored) => {
+        if (stored.length > 0) setFiles(stored);
+      })
+      .catch(() => {});
+  }, []);
+
+  function updateFiles(newFiles: File[]) {
+    setFiles(newFiles);
+    saveFiles(FILES_KEY, newFiles).catch(() => {});
+  }
 
   const canSubmit = files.length > 0 && !isRunning;
 
@@ -48,11 +59,25 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
 
   async function handleSubmit() {
     if (files.length === 0) return;
-    const initial: ResultItem[] = files.map((file) => ({ file, status: "queued", jobId: null, error: null }));
+    const initial = files.map((file) => ({ fileName: file.name, status: "queued" as const, jobId: null, error: null }));
     setResults(initial);
     setIsRunning(true);
     await Promise.all(files.map((file, index) => runOne(file, index)));
     setIsRunning(false);
+  }
+
+  const doneJobIds = results.filter((r) => r.status === "done" && r.jobId).map((r) => r.jobId as string);
+
+  async function handleDownloadZip() {
+    setError(null);
+    setIsZipping(true);
+    try {
+      await downloadAllAsZip(doneJobIds, ["vocals", "instrumental"], "pnkey-separated.zip");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't build the ZIP.");
+    } finally {
+      setIsZipping(false);
+    }
   }
 
   return (
@@ -69,7 +94,7 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
       <MultiFileDrop
         label="Song file(s)"
         files={files}
-        onFilesChange={setFiles}
+        onFilesChange={updateFiles}
         onRecorded={onRecorded}
         lastRecording={lastRecording}
       />
@@ -82,11 +107,25 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
         {isRunning ? "Separating…" : files.length > 1 ? `Separate ${files.length} songs` : "Separate"}
       </button>
 
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {doneJobIds.length >= 1 && (
+        <button
+          onClick={handleDownloadZip}
+          disabled={isZipping}
+          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isZipping
+            ? "Building ZIP…"
+            : `Download all ${doneJobIds.length > 1 ? `${doneJobIds.length} songs' ` : ""}stems as ZIP`}
+        </button>
+      )}
+
       {results.length > 0 && (
         <div className="space-y-4">
           {results.map((result, i) => (
-            <div key={`${result.file.name}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.file.name}</p>
+            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
+              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
               {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
               {result.status === "processing" && <p className="text-sm text-zinc-400">Separating…</p>}

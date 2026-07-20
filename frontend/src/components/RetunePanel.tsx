@@ -7,24 +7,19 @@ import {
   submitRetuneJob,
   type AnalyzeResult,
 } from "../lib/api";
+import { downloadAllAsZip } from "../lib/downloadZip";
+import { loadFiles, saveFiles } from "../lib/fileStore";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
+import { useLocalStorageState } from "../lib/useLocalStorageState";
+import { useResumableResults } from "../lib/useResumableResults";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
-
-type ItemStatus = "queued" | "processing" | "done" | "error";
 
 interface RetunePresetData {
   targetBpm?: number;
   targetKeyIndex?: number;
   useManualShift?: boolean;
   manualShift?: number;
-}
-
-interface ResultItem {
-  file: File;
-  status: ItemStatus;
-  jobId: string | null;
-  error: string | null;
 }
 
 type Analysis = AnalyzeResult | "error";
@@ -34,29 +29,50 @@ interface RetunePanelProps {
   onRecorded: (file: File) => void;
 }
 
+const FILES_KEY = "pnkey:retune:files";
+
 export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [analysisByFile, setAnalysisByFile] = useState<Map<File, Analysis>>(new Map());
   const inFlightRef = useRef<Set<File>>(new Set());
 
-  const [sourceBpmOverride, setSourceBpmOverride] = useState<string | null>(null);
-  const [sourceKeyOverride, setSourceKeyOverride] = useState<number | null>(null);
+  const [sourceBpmOverride, setSourceBpmOverride] = useLocalStorageState<string | null>(
+    "pnkey:retune:sourceBpmOverride",
+    null,
+  );
+  const [sourceKeyOverride, setSourceKeyOverride] = useLocalStorageState<number | null>(
+    "pnkey:retune:sourceKeyOverride",
+    null,
+  );
 
-  const [targetBpm, setTargetBpm] = useState("");
-  const [targetKey, setTargetKey] = useState(0);
-  const [useManualShift, setUseManualShift] = useState(false);
-  const [manualShift, setManualShift] = useState(0);
+  const [targetBpm, setTargetBpm] = useLocalStorageState("pnkey:retune:targetBpm", "");
+  const [targetKey, setTargetKey] = useLocalStorageState("pnkey:retune:targetKey", 0);
+  const [useManualShift, setUseManualShift] = useLocalStorageState("pnkey:retune:useManualShift", false);
+  const [manualShift, setManualShift] = useLocalStorageState("pnkey:retune:manualShift", 0);
 
-  const [results, setResults] = useState<ResultItem[]>([]);
+  const [results, setResults] = useResumableResults("pnkey:retune:results");
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    loadFiles(FILES_KEY)
+      .then((stored) => {
+        if (stored.length > 0) {
+          setFiles(stored);
+          analyzeNewFiles(stored);
+        }
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,15 +91,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
   const pendingAnalysisCount = files.filter((f) => !analysisByFile.has(f)).length;
   const failedAnalysisCount = files.filter((f) => analysisByFile.get(f) === "error").length;
 
-  function handleFilesChange(newFiles: File[]) {
-    setFiles(newFiles);
-    setError(null);
-
-    if (newFiles.length === 1 && newFiles[0] !== singleFile) {
-      setSourceBpmOverride(null);
-      setSourceKeyOverride(null);
-    }
-
+  function analyzeNewFiles(newFiles: File[]) {
     const toAnalyze = newFiles.filter((f) => !analysisByFile.has(f) && !inFlightRef.current.has(f));
     toAnalyze.forEach((f) => {
       inFlightRef.current.add(f);
@@ -92,6 +100,19 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         .catch(() => setAnalysisByFile((prev) => new Map(prev).set(f, "error")))
         .finally(() => inFlightRef.current.delete(f));
     });
+  }
+
+  function handleFilesChange(newFiles: File[]) {
+    setFiles(newFiles);
+    saveFiles(FILES_KEY, newFiles).catch(() => {});
+    setError(null);
+
+    if (newFiles.length === 1 && newFiles[0] !== singleFile) {
+      setSourceBpmOverride(null);
+      setSourceKeyOverride(null);
+    }
+
+    analyzeNewFiles(newFiles);
   }
 
   function effectiveSourceFor(file: File): { bpm: number; keyIndex: number } | null {
@@ -212,11 +233,25 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
   async function handleSubmit() {
     if (files.length === 0) return;
     setError(null);
-    const initial: ResultItem[] = files.map((file) => ({ file, status: "queued", jobId: null, error: null }));
+    const initial = files.map((file) => ({ fileName: file.name, status: "queued" as const, jobId: null, error: null }));
     setResults(initial);
     setIsRunning(true);
     await Promise.all(files.map((file, index) => runOne(file, index)));
     setIsRunning(false);
+  }
+
+  const doneJobIds = results.filter((r) => r.status === "done" && r.jobId).map((r) => r.jobId as string);
+
+  async function handleDownloadZip() {
+    setError(null);
+    setIsZipping(true);
+    try {
+      await downloadAllAsZip(doneJobIds, ["output"], "pnkey-retuned-vocals.zip");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't build the ZIP.");
+    } finally {
+      setIsZipping(false);
+    }
   }
 
   return (
@@ -374,11 +409,21 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
+      {doneJobIds.length >= 2 && (
+        <button
+          onClick={handleDownloadZip}
+          disabled={isZipping}
+          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isZipping ? "Building ZIP…" : `Download all ${doneJobIds.length} as ZIP`}
+        </button>
+      )}
+
       {results.length > 0 && (
         <div className="space-y-3">
           {results.map((result, i) => (
-            <div key={`${result.file.name}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.file.name}</p>
+            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
+              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
               {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
               {result.status === "processing" && <p className="text-sm text-zinc-400">Processing…</p>}

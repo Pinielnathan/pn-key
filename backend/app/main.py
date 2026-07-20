@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -20,6 +21,9 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Content-Disposition isn't in the CORS-safelisted response headers by default, so without this
+    # the frontend's fetch() calls can't read the server-suggested filename off a cross-origin response.
+    expose_headers=["Content-Disposition"],
 )
 
 _SAFE_EXTENSIONS = {
@@ -31,6 +35,22 @@ _SAFE_EXTENSIONS = {
 def _safe_suffix(filename: str | None) -> str:
     suffix = Path(filename or "").suffix.lower()
     return suffix if suffix in _SAFE_EXTENSIONS else ".wav"
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-")
+    return slug or "pnkey"
+
+
+def _download_filename(job: Job, stem: str, format: str) -> str:
+    """A descriptive filename carrying the detected BPM/key, instead of a bare stem name."""
+    detected = job.metadata.get(stem)
+    if not detected:
+        return f"{stem}.{format}"
+    slug = _slugify(detected.get("title", stem))
+    bpm = round(detected["bpm"])
+    key = detected["key_name"]
+    return f"{slug}-{bpm}bpm-{key}.{format}"
 
 
 def _parse_presets(presets: str) -> list[str]:
@@ -73,7 +93,9 @@ def _run_retune(
     try:
         job.status = "processing"
         output_path = job.dir / "output.wav"
-        job.outputs["output"] = audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
+        paths, detected = audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
+        job.outputs["output"] = paths
+        job.metadata["output"] = detected
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -83,7 +105,9 @@ def _run_retune(
 def _run_separate(job: Job, input_path: Path) -> None:
     try:
         job.status = "processing"
-        job.outputs.update(audio_ops.separate(input_path, job.dir / "stems"))
+        outputs, metadata = audio_ops.separate(input_path, job.dir / "stems")
+        job.outputs.update(outputs)
+        job.metadata.update(metadata)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -94,7 +118,9 @@ def _run_effect(job: Job, input_path: Path, preset_slugs: list[str]) -> None:
     try:
         job.status = "processing"
         output_path = job.dir / "output.wav"
-        job.outputs["output"] = audio_ops.apply_effect(input_path, output_path, preset_slugs)
+        paths, detected = audio_ops.apply_effect(input_path, output_path, preset_slugs)
+        job.outputs["output"] = paths
+        job.metadata["output"] = detected
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -231,7 +257,7 @@ async def download_output(job_id: str, stem: str, format: str = "wav"):
     if path is None or not path.exists():
         raise HTTPException(status_code=404, detail=f"Format '{format}' not available")
     media_type = "audio/mpeg" if format == "mp3" else "audio/wav"
-    return FileResponse(path, filename=f"{stem}.{format}", media_type=media_type)
+    return FileResponse(path, filename=_download_filename(job, stem, format), media_type=media_type)
 
 
 @app.get("/api/health")

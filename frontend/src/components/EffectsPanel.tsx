@@ -8,24 +8,20 @@ import {
   type EffectCategory,
   type EffectPreset,
 } from "../lib/api";
+import { downloadAllAsZip } from "../lib/downloadZip";
+import { loadFiles, saveFiles } from "../lib/fileStore";
+import { useLocalStorageState } from "../lib/useLocalStorageState";
+import { useResumableResults } from "../lib/useResumableResults";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
 
-type ItemStatus = "queued" | "processing" | "done" | "error";
-
 const PAGE_SIZE = 9;
+const FILES_KEY = "pnkey:effects:files";
 
 interface EffectsPresetData {
   presets?: string[];
   /** @deprecated kept for backward compatibility with preset files saved before multi-select */
   preset?: string;
-}
-
-interface ResultItem {
-  file: File;
-  status: ItemStatus;
-  jobId: string | null;
-  error: string | null;
 }
 
 interface EffectsPanelProps {
@@ -37,23 +33,27 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
   const [presets, setPresets] = useState<EffectPreset[]>([]);
   const [categories, setCategories] = useState<EffectCategory[]>([]);
   const [presetsError, setPresetsError] = useState<string | null>(null);
-  const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<string>("all");
-  const [page, setPage] = useState(1);
+  const [selectedPresets, setSelectedPresets] = useLocalStorageState<string[]>("pnkey:effects:selectedPresets", []);
+  const [search, setSearch] = useLocalStorageState("pnkey:effects:search", "");
+  const [category, setCategory] = useLocalStorageState("pnkey:effects:category", "all");
+  const [page, setPage] = useLocalStorageState("pnkey:effects:page", 1);
   const [files, setFiles] = useState<File[]>([]);
-  const [results, setResults] = useState<ResultItem[]>([]);
+  const [results, setResults] = useResumableResults("pnkey:effects:results");
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   useEffect(() => {
     fetchEffectPresets()
       .then(({ presets: list, categories: cats }) => {
         setPresets(list);
         setCategories(cats);
-        setSelectedPresets((current) => (current.length > 0 ? current : list[0] ? [list[0].slug] : []));
+        setSelectedPresets((current) => {
+          const stillValid = current.filter((slug) => list.some((p) => p.slug === slug));
+          return stillValid.length > 0 ? stillValid : list[0] ? [list[0].slug] : [];
+        });
       })
       .catch((err) => setPresetsError(err instanceof Error ? err.message : "Couldn't load presets"));
   }, []);
@@ -64,6 +64,19 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    loadFiles(FILES_KEY)
+      .then((stored) => {
+        if (stored.length > 0) setFiles(stored);
+      })
+      .catch(() => {});
+  }, []);
+
+  function updateFiles(newFiles: File[]) {
+    setFiles(newFiles);
+    saveFiles(FILES_KEY, newFiles).catch(() => {});
+  }
 
   const filteredPresets = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -165,11 +178,25 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
   async function handleSubmit() {
     if (files.length === 0 || selectedPresets.length === 0) return;
     setError(null);
-    const initial: ResultItem[] = files.map((file) => ({ file, status: "queued", jobId: null, error: null }));
+    const initial = files.map((file) => ({ fileName: file.name, status: "queued" as const, jobId: null, error: null }));
     setResults(initial);
     setIsRunning(true);
     await Promise.all(files.map((file, index) => runOne(file, selectedPresets, index)));
     setIsRunning(false);
+  }
+
+  const doneJobIds = results.filter((r) => r.status === "done" && r.jobId).map((r) => r.jobId as string);
+
+  async function handleDownloadZip() {
+    setError(null);
+    setIsZipping(true);
+    try {
+      await downloadAllAsZip(doneJobIds, ["output"], "pnkey-effects.zip");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't build the ZIP.");
+    } finally {
+      setIsZipping(false);
+    }
   }
 
   return (
@@ -185,7 +212,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
       <MultiFileDrop
         label="Vocal audio file(s)"
         files={files}
-        onFilesChange={setFiles}
+        onFilesChange={updateFiles}
         onRecorded={onRecorded}
         lastRecording={lastRecording}
       />
@@ -300,11 +327,21 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
+      {doneJobIds.length >= 2 && (
+        <button
+          onClick={handleDownloadZip}
+          disabled={isZipping}
+          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isZipping ? "Building ZIP…" : `Download all ${doneJobIds.length} as ZIP`}
+        </button>
+      )}
+
       {results.length > 0 && (
         <div className="space-y-3">
           {results.map((result, i) => (
-            <div key={`${result.file.name}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.file.name}</p>
+            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
+              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
               {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
               {result.status === "processing" && <p className="text-sm text-zinc-400">Applying…</p>}
