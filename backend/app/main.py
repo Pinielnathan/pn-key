@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
@@ -70,6 +71,17 @@ def _run_separate(job: Job, input_path: Path) -> None:
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
         job.error = str(exc)
+
+
+@app.post("/api/analyze")
+async def analyze_audio(file: UploadFile = File(...)):
+    with tempfile.TemporaryDirectory(dir=STORAGE_DIR) as tmp_dir:
+        input_path = Path(tmp_dir) / f"input{_safe_suffix(file.filename)}"
+        await _save_upload(file, input_path)
+        try:
+            return audio_ops.analyze(input_path)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail=f"Could not analyze audio: {exc}") from exc
 
 
 @app.post("/api/jobs/retune")

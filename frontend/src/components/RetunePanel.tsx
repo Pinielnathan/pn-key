@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { downloadUrl, pollJobUntilDone, submitRetuneJob } from "../lib/api";
+import { analyzeAudio, downloadUrl, pollJobUntilDone, submitRetuneJob } from "../lib/api";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
 import { FileDrop } from "./FileDrop";
 
@@ -16,12 +16,39 @@ export function RetunePanel() {
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [detected, setDetected] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const computedShift = semitoneShiftBetween(sourceKey, targetKey);
   const effectiveShift = useManualShift ? manualShift : computedShift;
 
   const canSubmit =
-    file !== null && Number(sourceBpm) > 0 && Number(targetBpm) > 0 && stage !== "uploading" && stage !== "processing";
+    file !== null &&
+    Number(sourceBpm) > 0 &&
+    Number(targetBpm) > 0 &&
+    !isAnalyzing &&
+    stage !== "uploading" &&
+    stage !== "processing";
+
+  async function handleFileSelected(selected: File) {
+    setFile(selected);
+    setDetected(false);
+    setAnalyzeError(null);
+    setIsAnalyzing(true);
+    try {
+      const result = await analyzeAudio(selected);
+      setSourceBpm(String(result.bpm));
+      setSourceKey(result.key_index);
+      setDetected(true);
+    } catch (err) {
+      setAnalyzeError(
+        err instanceof Error ? err.message : "Couldn't auto-detect BPM/key — enter them manually below.",
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!file) return;
@@ -54,13 +81,23 @@ export function RetunePanel() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-100">Retune vocals</h2>
         <p className="text-sm text-zinc-400">
-          Upload a vocal track, tell us its current BPM and key, and pick what you want it changed to.
+          Upload a vocal track — its BPM and key are detected automatically — then pick what you want them
+          changed to.
         </p>
       </div>
 
-      <FileDrop label="Vocal audio file" file={file} onFileSelected={setFile} />
+      <FileDrop label="Vocal audio file" file={file} onFileSelected={handleFileSelected} />
 
-      <div className="grid grid-cols-2 gap-4">
+      {isAnalyzing && <p className="text-sm text-zinc-400">Detecting BPM &amp; key…</p>}
+      {detected && !isAnalyzing && (
+        <p className="text-sm text-brand-lime">
+          Detected automatically — adjust the original BPM/key below if it looks off (auto-detection is a
+          best effort, especially on a cappella vocals with no strong beat).
+        </p>
+      )}
+      {analyzeError && <p className="text-sm text-amber-400">{analyzeError}</p>}
+
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <label className="block text-sm">
           <span className="text-zinc-300">Original BPM</span>
           <input
@@ -85,7 +122,7 @@ export function RetunePanel() {
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <label className="block text-sm">
           <span className="text-zinc-300">Original key</span>
           <select

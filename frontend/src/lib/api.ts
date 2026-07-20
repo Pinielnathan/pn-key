@@ -25,6 +25,22 @@ async function parseJsonOrThrow<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface AnalyzeResult {
+  bpm: number;
+  key_index: number;
+}
+
+export async function analyzeAudio(file: File): Promise<AnalyzeResult> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${API_BASE}/api/analyze`, {
+    method: "POST",
+    body: form,
+  });
+  return parseJsonOrThrow(res);
+}
+
 export async function submitRetuneJob(params: {
   file: File;
   sourceBpm: number;
