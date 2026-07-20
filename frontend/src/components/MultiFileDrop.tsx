@@ -6,9 +6,20 @@ interface MultiFileDropProps {
   accept?: string;
   files: File[];
   onFilesChange: (files: File[]) => void;
+  /** Fired whenever the mic captures a new recording, separately from onFilesChange, so a parent can share it with other tabs. */
+  onRecorded?: (file: File) => void;
+  /** A recording captured elsewhere (e.g. another tab) that can be reused here via a "Use last recording" button. */
+  lastRecording?: File | null;
 }
 
-export function MultiFileDrop({ label, accept = "audio/*", files, onFilesChange }: MultiFileDropProps) {
+export function MultiFileDrop({
+  label,
+  accept = "audio/*",
+  files,
+  onFilesChange,
+  onRecorded,
+  lastRecording,
+}: MultiFileDropProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -71,7 +82,21 @@ export function MultiFileDrop({ label, accept = "audio/*", files, onFilesChange 
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         {previewUrl && <audio controls src={previewUrl} className="h-9 min-w-[200px] flex-1" />}
-        <MicRecorder onRecorded={(recorded) => addFiles([recorded])} />
+        <MicRecorder
+          onRecorded={(recorded) => {
+            addFiles([recorded]);
+            onRecorded?.(recorded);
+          }}
+        />
+        {lastRecording && !files.includes(lastRecording) && (
+          <button
+            type="button"
+            onClick={() => addFiles([lastRecording])}
+            className="shrink-0 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500"
+          >
+            Use last recording
+          </button>
+        )}
       </div>
 
       {files.length > 0 && (

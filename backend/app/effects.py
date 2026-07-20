@@ -375,9 +375,19 @@ def list_presets() -> list[dict]:
     ]
 
 
+def apply_presets(slugs: list[str], audio: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Runs audio through each preset's board in sequence — equivalent to one combined chain."""
+    if not slugs:
+        raise ValueError("At least one preset must be selected")
+    result = audio
+    for slug in slugs:
+        preset = _PRESETS.get(slug)
+        if preset is None:
+            raise ValueError(f"Unknown preset: {slug}")
+        board = preset["board"]()
+        result = board(result, sample_rate)
+    return result
+
+
 def apply_preset(slug: str, audio: np.ndarray, sample_rate: int) -> np.ndarray:
-    preset = _PRESETS.get(slug)
-    if preset is None:
-        raise ValueError(f"Unknown preset: {slug}")
-    board = preset["board"]()
-    return board(audio, sample_rate)
+    return apply_presets([slug], audio, sample_rate)

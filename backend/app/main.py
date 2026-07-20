@@ -1,3 +1,4 @@
+import json
 import tempfile
 from pathlib import Path
 
@@ -30,6 +31,22 @@ _SAFE_EXTENSIONS = {
 def _safe_suffix(filename: str | None) -> str:
     suffix = Path(filename or "").suffix.lower()
     return suffix if suffix in _SAFE_EXTENSIONS else ".wav"
+
+
+def _parse_presets(presets: str) -> list[str]:
+    """`presets` is a JSON array string, e.g. '["cathedral","doubler"]'."""
+    try:
+        slugs = json.loads(presets)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="`presets` must be a JSON array of slugs") from exc
+    if not isinstance(slugs, list) or not slugs or not all(isinstance(s, str) for s in slugs):
+        raise HTTPException(status_code=400, detail="`presets` must be a non-empty JSON array of strings")
+
+    available = {p["slug"] for p in effects.list_presets()}
+    unknown = [s for s in slugs if s not in available]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown preset(s): {', '.join(unknown)}")
+    return slugs
 
 
 async def _save_upload(upload: UploadFile, dest: Path) -> None:
@@ -73,11 +90,11 @@ def _run_separate(job: Job, input_path: Path) -> None:
         job.error = str(exc)
 
 
-def _run_effect(job: Job, input_path: Path, preset_slug: str) -> None:
+def _run_effect(job: Job, input_path: Path, preset_slugs: list[str]) -> None:
     try:
         job.status = "processing"
         output_path = job.dir / "output.wav"
-        job.outputs["output"] = audio_ops.apply_effect(input_path, output_path, preset_slug)
+        job.outputs["output"] = audio_ops.apply_effect(input_path, output_path, preset_slugs)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -93,6 +110,29 @@ async def analyze_audio(file: UploadFile = File(...)):
             return audio_ops.analyze(input_path)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=422, detail=f"Could not analyze audio: {exc}") from exc
+
+
+@app.post("/api/retune/preview")
+async def preview_retune(
+    file: UploadFile = File(...),
+    source_bpm: float = Form(...),
+    target_bpm: float = Form(...),
+    semitone_shift: float = Form(0),
+):
+    if source_bpm <= 0 or target_bpm <= 0:
+        raise HTTPException(status_code=400, detail="BPM values must be positive")
+    if not (-24 <= semitone_shift <= 24):
+        raise HTTPException(status_code=400, detail="Semitone shift must be between -24 and 24")
+
+    with tempfile.TemporaryDirectory(dir=STORAGE_DIR) as tmp_dir:
+        input_path = Path(tmp_dir) / f"input{_safe_suffix(file.filename)}"
+        await _save_upload(file, input_path)
+        try:
+            mp3_bytes = audio_ops.preview_retune(input_path, source_bpm, target_bpm, semitone_shift)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail=f"Could not generate preview: {exc}") from exc
+
+    return Response(content=mp3_bytes, media_type="audio/mpeg")
 
 
 @app.post("/api/jobs/retune")
@@ -135,16 +175,14 @@ async def list_effect_presets():
 
 
 @app.post("/api/effects/preview")
-async def preview_effect(file: UploadFile = File(...), preset: str = Form(...)):
-    available = {p["slug"] for p in effects.list_presets()}
-    if preset not in available:
-        raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
+async def preview_effect(file: UploadFile = File(...), presets: str = Form(...)):
+    slugs = _parse_presets(presets)
 
     with tempfile.TemporaryDirectory(dir=STORAGE_DIR) as tmp_dir:
         input_path = Path(tmp_dir) / f"input{_safe_suffix(file.filename)}"
         await _save_upload(file, input_path)
         try:
-            mp3_bytes = audio_ops.preview_effect(input_path, preset)
+            mp3_bytes = audio_ops.preview_effect(input_path, slugs)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=422, detail=f"Could not generate preview: {exc}") from exc
 
@@ -155,17 +193,15 @@ async def preview_effect(file: UploadFile = File(...), preset: str = Form(...)):
 async def create_effect_job(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    preset: str = Form(...),
+    presets: str = Form(...),
 ):
-    available = {p["slug"] for p in effects.list_presets()}
-    if preset not in available:
-        raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
+    slugs = _parse_presets(presets)
 
     job = create_job("effects")
     input_path = job.dir / f"input{_safe_suffix(file.filename)}"
     await _save_upload(file, input_path)
 
-    background_tasks.add_task(_run_effect, job, input_path, preset)
+    background_tasks.add_task(_run_effect, job, input_path, slugs)
     return {"job_id": job.id, "status": job.status}
 
 

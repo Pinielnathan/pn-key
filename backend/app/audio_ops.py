@@ -112,6 +112,19 @@ def _write_wav_and_mp3(
     return {"wav": wav_path, "mp3": mp3_path}
 
 
+def _time_stretch_and_shift(y: np.ndarray, sr: int, rate: float, semitone_shift: float) -> np.ndarray:
+    channels = []
+    for channel in y:
+        stretched = librosa.effects.time_stretch(channel, rate=rate) if rate != 1.0 else channel
+        shifted = (
+            librosa.effects.pitch_shift(stretched, sr=sr, n_steps=semitone_shift)
+            if semitone_shift != 0
+            else stretched
+        )
+        channels.append(shifted)
+    return np.stack(channels, axis=0)
+
+
 def retune(
     input_path: Path,
     output_path: Path,
@@ -125,19 +138,19 @@ def retune(
         y = y[np.newaxis, :]
 
     rate = target_bpm / source_bpm
-
-    channels = []
-    for channel in y:
-        stretched = librosa.effects.time_stretch(channel, rate=rate) if rate != 1.0 else channel
-        shifted = (
-            librosa.effects.pitch_shift(stretched, sr=sr, n_steps=semitone_shift)
-            if semitone_shift != 0
-            else stretched
-        )
-        channels.append(shifted)
-
-    out = np.stack(channels, axis=0)
+    out = _time_stretch_and_shift(y, sr, rate, semitone_shift)
     return _write_wav_and_mp3(out, sr, output_path, title="PN Key - Retuned vocal")
+
+
+def preview_retune(input_path: Path, source_bpm: float, target_bpm: float, semitone_shift: float) -> bytes:
+    """Fast, short MP3 preview of a retune — no job queue, no persistence."""
+    y, sr = librosa.load(str(input_path), sr=None, mono=False, duration=PREVIEW_DURATION_SECONDS)
+    if y.ndim == 1:
+        y = y[np.newaxis, :]
+
+    rate = target_bpm / source_bpm
+    processed = _time_stretch_and_shift(y, sr, rate, semitone_shift)
+    return encode_mp3(processed, sr, bit_rate=128)
 
 
 def separate(input_path: Path, out_dir: Path) -> dict[str, dict[str, Path]]:
@@ -195,21 +208,22 @@ def separate(input_path: Path, out_dir: Path) -> dict[str, dict[str, Path]]:
     }
 
 
-def apply_effect(input_path: Path, output_path: Path, preset_slug: str) -> dict[str, Path]:
-    """Runs a named pedalboard preset over the upload and writes tagged WAV + MP3 outputs."""
+def apply_effect(input_path: Path, output_path: Path, preset_slugs: list[str]) -> dict[str, Path]:
+    """Runs one or more chained pedalboard presets over the upload, writes tagged WAV + MP3 outputs."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False)
     if y.ndim == 1:
         y = y[np.newaxis, :]
 
-    processed = effects.apply_preset(preset_slug, y.astype(np.float32), sr)
-    return _write_wav_and_mp3(processed, sr, output_path, title="PN Key - Effect")
+    processed = effects.apply_presets(preset_slugs, y.astype(np.float32), sr)
+    title = "PN Key - Effect" if len(preset_slugs) == 1 else "PN Key - Effects"
+    return _write_wav_and_mp3(processed, sr, output_path, title=title)
 
 
-def preview_effect(input_path: Path, preset_slug: str) -> bytes:
-    """Fast, short (few-second) MP3 preview of a preset — no job queue, no persistence."""
+def preview_effect(input_path: Path, preset_slugs: list[str]) -> bytes:
+    """Fast, short (few-second) MP3 preview of one or more chained presets — no job, no persistence."""
     y, sr = librosa.load(str(input_path), sr=None, mono=False, duration=PREVIEW_DURATION_SECONDS)
     if y.ndim == 1:
         y = y[np.newaxis, :]
 
-    processed = effects.apply_preset(preset_slug, y.astype(np.float32), sr)
+    processed = effects.apply_presets(preset_slugs, y.astype(np.float32), sr)
     return encode_mp3(processed, sr, bit_rate=128)

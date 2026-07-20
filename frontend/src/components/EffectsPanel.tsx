@@ -16,6 +16,8 @@ type ItemStatus = "queued" | "processing" | "done" | "error";
 const PAGE_SIZE = 9;
 
 interface EffectsPresetData {
+  presets?: string[];
+  /** @deprecated kept for backward compatibility with preset files saved before multi-select */
   preset?: string;
 }
 
@@ -26,11 +28,16 @@ interface ResultItem {
   error: string | null;
 }
 
-export function EffectsPanel() {
+interface EffectsPanelProps {
+  lastRecording: File | null;
+  onRecorded: (file: File) => void;
+}
+
+export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
   const [presets, setPresets] = useState<EffectPreset[]>([]);
   const [categories, setCategories] = useState<EffectCategory[]>([]);
   const [presetsError, setPresetsError] = useState<string | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -46,7 +53,7 @@ export function EffectsPanel() {
       .then(({ presets: list, categories: cats }) => {
         setPresets(list);
         setCategories(cats);
-        setSelectedPreset((current) => current ?? list[0]?.slug ?? null);
+        setSelectedPresets((current) => (current.length > 0 ? current : list[0] ? [list[0].slug] : []));
       })
       .catch((err) => setPresetsError(err instanceof Error ? err.message : "Couldn't load presets"));
   }, []);
@@ -84,8 +91,10 @@ export function EffectsPanel() {
     setPage(1);
   }
 
-  function selectPreset(slug: string) {
-    setSelectedPreset(slug);
+  function togglePreset(slug: string) {
+    setSelectedPresets((current) =>
+      current.includes(slug) ? current.filter((s) => s !== slug) : [...current, slug],
+    );
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -94,11 +103,11 @@ export function EffectsPanel() {
 
   async function handlePreview() {
     const sampleFile = files[0];
-    if (!sampleFile || !selectedPreset) return;
+    if (!sampleFile || selectedPresets.length === 0) return;
     setError(null);
     setIsPreviewing(true);
     try {
-      const blob = await previewEffect(sampleFile, selectedPreset);
+      const blob = await previewEffect(sampleFile, selectedPresets);
       setPreviewUrl((old) => {
         if (old) URL.revokeObjectURL(old);
         return URL.createObjectURL(blob);
@@ -110,23 +119,29 @@ export function EffectsPanel() {
     }
   }
 
-  const canSubmit = files.length > 0 && selectedPreset !== null && !isRunning;
+  const canSubmit = files.length > 0 && selectedPresets.length > 0 && !isRunning;
 
   function getPresetData(): EffectsPresetData {
-    return { preset: selectedPreset ?? undefined };
+    return { presets: selectedPresets.length > 0 ? selectedPresets : undefined };
   }
 
   function loadPresetData(data: EffectsPresetData) {
-    if (typeof data.preset === "string" && presets.some((p) => p.slug === data.preset)) {
-      selectPreset(data.preset);
+    const slugs = Array.isArray(data.presets) ? data.presets : typeof data.preset === "string" ? [data.preset] : [];
+    const valid = slugs.filter((slug) => presets.some((p) => p.slug === slug));
+    if (valid.length > 0 && valid.length === slugs.length) {
+      setSelectedPresets(valid);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
     } else {
       setError("That preset file names an effect that isn't available here.");
     }
   }
 
-  async function runOne(file: File, preset: string, index: number) {
+  async function runOne(file: File, presetSlugs: string[], index: number) {
     try {
-      const { job_id } = await submitEffectJob(file, preset);
+      const { job_id } = await submitEffectJob(file, presetSlugs);
       setResults((prev) => prev.map((r, i) => (i === index ? { ...r, jobId: job_id, status: "processing" } : r)));
       const finalStatus = await pollJobUntilDone(job_id, () => {});
       setResults((prev) =>
@@ -148,12 +163,12 @@ export function EffectsPanel() {
   }
 
   async function handleSubmit() {
-    if (files.length === 0 || !selectedPreset) return;
+    if (files.length === 0 || selectedPresets.length === 0) return;
     setError(null);
     const initial: ResultItem[] = files.map((file) => ({ file, status: "queued", jobId: null, error: null }));
     setResults(initial);
     setIsRunning(true);
-    await Promise.all(files.map((file, index) => runOne(file, selectedPreset, index)));
+    await Promise.all(files.map((file, index) => runOne(file, selectedPresets, index)));
     setIsRunning(false);
   }
 
@@ -162,12 +177,18 @@ export function EffectsPanel() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-100">Voice effects</h2>
         <p className="text-sm text-zinc-400">
-          Upload one or more vocals, pick from {presets.length || 30} presets, and download the processed
-          result.
+          Upload one or more vocals, pick from {presets.length || 30} presets (combine several to chain
+          them), and download the processed result.
         </p>
       </div>
 
-      <MultiFileDrop label="Vocal audio file(s)" files={files} onFilesChange={setFiles} />
+      <MultiFileDrop
+        label="Vocal audio file(s)"
+        files={files}
+        onFilesChange={setFiles}
+        onRecorded={onRecorded}
+        lastRecording={lastRecording}
+      />
 
       {presetsError && <p className="text-sm text-red-400">{presetsError}</p>}
 
@@ -197,14 +218,19 @@ export function EffectsPanel() {
         <p className="text-sm text-zinc-500">No presets match that search.</p>
       )}
 
+      <div className="flex items-center justify-between text-xs text-zinc-500">
+        <span>Click to select. Pick more than one to chain them in order.</span>
+        {selectedPresets.length > 0 && <span>{selectedPresets.length} selected</span>}
+      </div>
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {pagePresets.map((preset) => (
           <button
             key={preset.slug}
-            onClick={() => selectPreset(preset.slug)}
+            onClick={() => togglePreset(preset.slug)}
             title={preset.description}
             className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-              selectedPreset === preset.slug
+              selectedPresets.includes(preset.slug)
                 ? "border-brand-lime bg-brand-lime/10 text-brand-lime"
                 : "border-zinc-700 bg-ink-900 text-zinc-300 hover:border-zinc-500"
             }`}
@@ -240,7 +266,7 @@ export function EffectsPanel() {
       <div className="flex items-center gap-3">
         <button
           onClick={handlePreview}
-          disabled={files.length === 0 || !selectedPreset || isPreviewing}
+          disabled={files.length === 0 || selectedPresets.length === 0 || isPreviewing}
           className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isPreviewing ? "Rendering preview…" : "Preview"}
@@ -263,7 +289,13 @@ export function EffectsPanel() {
         disabled={!canSubmit}
         className="w-full rounded-md bg-brand-lime px-4 py-2 font-semibold text-ink-950 transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500"
       >
-        {isRunning ? "Applying…" : files.length > 1 ? `Apply to ${files.length} files` : "Apply effect"}
+        {isRunning
+          ? "Applying…"
+          : files.length > 1
+            ? `Apply ${selectedPresets.length > 1 ? `${selectedPresets.length} effects` : "effect"} to ${files.length} files`
+            : selectedPresets.length > 1
+              ? `Apply ${selectedPresets.length} effects`
+              : "Apply effect"}
       </button>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

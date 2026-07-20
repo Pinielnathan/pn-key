@@ -11,7 +11,12 @@ interface ResultItem {
   error: string | null;
 }
 
-export function SeparatePanel() {
+interface SeparatePanelProps {
+  lastRecording: File | null;
+  onRecorded: (file: File) => void;
+}
+
+export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<ResultItem[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -61,7 +66,13 @@ export function SeparatePanel() {
         </p>
       </div>
 
-      <MultiFileDrop label="Song file(s)" files={files} onFilesChange={setFiles} />
+      <MultiFileDrop
+        label="Song file(s)"
+        files={files}
+        onFilesChange={setFiles}
+        onRecorded={onRecorded}
+        lastRecording={lastRecording}
+      />
 
       <button
         onClick={handleSubmit}

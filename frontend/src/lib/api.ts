@@ -93,10 +93,10 @@ export async function fetchEffectPresets(): Promise<EffectPresetsResponse> {
   return parseJsonOrThrow<EffectPresetsResponse>(res);
 }
 
-export async function submitEffectJob(file: File, preset: string): Promise<{ job_id: string }> {
+export async function submitEffectJob(file: File, presets: string[]): Promise<{ job_id: string }> {
   const form = new FormData();
   form.append("file", file);
-  form.append("preset", preset);
+  form.append("presets", JSON.stringify(presets));
 
   const res = await fetch(`${API_BASE}/api/jobs/effects`, {
     method: "POST",
@@ -105,15 +105,7 @@ export async function submitEffectJob(file: File, preset: string): Promise<{ job
   return parseJsonOrThrow(res);
 }
 
-export async function previewEffect(file: File, preset: string): Promise<Blob> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("preset", preset);
-
-  const res = await fetch(`${API_BASE}/api/effects/preview`, {
-    method: "POST",
-    body: form,
-  });
+async function blobOrThrow(res: Response): Promise<Blob> {
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -125,6 +117,37 @@ export async function previewEffect(file: File, preset: string): Promise<Blob> {
     throw new Error(detail);
   }
   return res.blob();
+}
+
+export async function previewEffect(file: File, presets: string[]): Promise<Blob> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("presets", JSON.stringify(presets));
+
+  const res = await fetch(`${API_BASE}/api/effects/preview`, {
+    method: "POST",
+    body: form,
+  });
+  return blobOrThrow(res);
+}
+
+export async function previewRetune(params: {
+  file: File;
+  sourceBpm: number;
+  targetBpm: number;
+  semitoneShift: number;
+}): Promise<Blob> {
+  const form = new FormData();
+  form.append("file", params.file);
+  form.append("source_bpm", String(params.sourceBpm));
+  form.append("target_bpm", String(params.targetBpm));
+  form.append("semitone_shift", String(params.semitoneShift));
+
+  const res = await fetch(`${API_BASE}/api/retune/preview`, {
+    method: "POST",
+    body: form,
+  });
+  return blobOrThrow(res);
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {

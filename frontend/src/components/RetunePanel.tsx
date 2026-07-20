@@ -1,5 +1,12 @@
-import { useRef, useState } from "react";
-import { analyzeAudio, downloadUrl, pollJobUntilDone, submitRetuneJob, type AnalyzeResult } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import {
+  analyzeAudio,
+  downloadUrl,
+  pollJobUntilDone,
+  previewRetune,
+  submitRetuneJob,
+  type AnalyzeResult,
+} from "../lib/api";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
@@ -22,7 +29,12 @@ interface ResultItem {
 
 type Analysis = AnalyzeResult | "error";
 
-export function RetunePanel() {
+interface RetunePanelProps {
+  lastRecording: File | null;
+  onRecorded: (file: File) => void;
+}
+
+export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [analysisByFile, setAnalysisByFile] = useState<Map<File, Analysis>>(new Map());
   const inFlightRef = useRef<Set<File>>(new Set());
@@ -38,6 +50,15 @@ export function RetunePanel() {
   const [results, setResults] = useState<ResultItem[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const singleFile = files.length === 1 ? files[0] : null;
   const singleAnalysis = singleFile ? analysisByFile.get(singleFile) : undefined;
@@ -88,6 +109,33 @@ export function RetunePanel() {
     const analysis = analysisByFile.get(file);
     if (!analysis || analysis === "error") return null;
     return { bpm: analysis.bpm, keyIndex: analysis.key_index };
+  }
+
+  const previewFile = files[0] ?? null;
+  const previewSource = previewFile ? effectiveSourceFor(previewFile) : null;
+  const canPreview = previewFile !== null && previewSource !== null && Number(targetBpm) > 0 && !isPreviewing;
+
+  async function handlePreview() {
+    if (!previewFile || !previewSource) return;
+    setError(null);
+    setIsPreviewing(true);
+    try {
+      const shift = useManualShift ? manualShift : semitoneShiftBetween(previewSource.keyIndex, targetKey);
+      const blob = await previewRetune({
+        file: previewFile,
+        sourceBpm: previewSource.bpm,
+        targetBpm: Number(targetBpm),
+        semitoneShift: shift,
+      });
+      setPreviewUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return URL.createObjectURL(blob);
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't generate a preview.");
+    } finally {
+      setIsPreviewing(false);
+    }
   }
 
   const canSubmit =
@@ -181,7 +229,13 @@ export function RetunePanel() {
         </p>
       </div>
 
-      <MultiFileDrop label="Vocal audio file(s)" files={files} onFilesChange={handleFilesChange} />
+      <MultiFileDrop
+        label="Vocal audio file(s)"
+        files={files}
+        onFilesChange={handleFilesChange}
+        onRecorded={onRecorded}
+        lastRecording={lastRecording}
+      />
 
       {files.length === 1 && isAnalyzingSingle && <p className="text-sm text-zinc-400">Detecting BPM &amp; key…</p>}
       {files.length === 1 && !isAnalyzingSingle && !singleAnalysisFailed && singleAnalysis && (
@@ -288,6 +342,20 @@ export function RetunePanel() {
           </span>
         )}
       </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handlePreview}
+          disabled={!canPreview}
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isPreviewing ? "Rendering preview…" : "Preview"}
+        </button>
+        <span className="text-xs text-zinc-500">
+          Quick sample from the first {files.length > 1 ? "file" : "upload"}, not the full render.
+        </span>
+      </div>
+      {previewUrl && <audio controls autoPlay src={previewUrl} className="w-full" />}
 
       <PresetControls
         filename="pnkey-retune-preset.json"

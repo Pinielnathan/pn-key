@@ -13,6 +13,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("retune");
+  const [lastRecording, setLastRecording] = useState<File | null>(null);
 
   return (
     <div className="mx-auto min-h-screen max-w-2xl px-4 py-6 sm:py-10">
@@ -41,9 +42,9 @@ export default function App() {
         ))}
       </div>
 
-      {tab === "retune" && <RetunePanel />}
-      {tab === "separate" && <SeparatePanel />}
-      {tab === "effects" && <EffectsPanel />}
+      {tab === "retune" && <RetunePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
+      {tab === "separate" && <SeparatePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
+      {tab === "effects" && <EffectsPanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
 
       <footer className="mt-12 border-t border-zinc-800 pt-6 text-xs text-zinc-500">
         <p>Only upload audio you have the rights to process.</p>
