@@ -17,8 +17,13 @@ This directory is deployed as its own [Hugging Face Space](https://huggingface.c
 ```
 cd backend
 git init                                                        # if not already a repo of its own
+git add .
+git commit -m "Deploy PN Key backend"
+git branch -M main                                              # Spaces expect `main`, not `master`
 git remote add hf https://huggingface.co/spaces/<your-username>/pn-key-backend
-git push hf master
+git push hf main
 ```
+
+When git asks for credentials: username = your HF username, password = an access token with **write** access (create one at huggingface.co → Settings → Access Tokens) — not your account password.
 
 Hugging Face builds the `Dockerfile` in this directory and exposes it on port 7860. Free-tier Spaces sleep after a period of inactivity and cold-start on the next request (30–60s+) — expected, not a bug, for a personal-scale tool with no ongoing cost.

@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(vercel *)",
+      "Bash(vercel)",
+      "PowerShell(vercel *)",
+      "PowerShell(vercel)"
+    ]
+  }
+}
