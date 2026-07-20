@@ -2,8 +2,16 @@ import { useState } from "react";
 import { analyzeAudio, downloadUrl, pollJobUntilDone, submitRetuneJob } from "../lib/api";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
 import { FileDrop } from "./FileDrop";
+import { PresetControls } from "./PresetControls";
 
 type Stage = "idle" | "uploading" | "processing" | "done" | "error";
+
+interface RetunePresetData {
+  targetBpm?: number;
+  targetKeyIndex?: number;
+  useManualShift?: boolean;
+  manualShift?: number;
+}
 
 export function RetunePanel() {
   const [file, setFile] = useState<File | null>(null);
@@ -30,6 +38,36 @@ export function RetunePanel() {
     !isAnalyzing &&
     stage !== "uploading" &&
     stage !== "processing";
+
+  function getPresetData(): RetunePresetData {
+    return {
+      targetBpm: Number(targetBpm) || undefined,
+      targetKeyIndex: targetKey,
+      useManualShift,
+      manualShift,
+    };
+  }
+
+  function loadPresetData(data: RetunePresetData) {
+    setError(null);
+    if (typeof data.targetBpm === "number" && data.targetBpm > 0) {
+      setTargetBpm(String(data.targetBpm));
+    }
+    if (
+      typeof data.targetKeyIndex === "number" &&
+      Number.isInteger(data.targetKeyIndex) &&
+      data.targetKeyIndex >= 0 &&
+      data.targetKeyIndex < 12
+    ) {
+      setTargetKey(data.targetKeyIndex);
+    }
+    if (typeof data.useManualShift === "boolean") {
+      setUseManualShift(data.useManualShift);
+    }
+    if (typeof data.manualShift === "number" && data.manualShift >= -24 && data.manualShift <= 24) {
+      setManualShift(data.manualShift);
+    }
+  }
 
   async function handleFileSelected(selected: File) {
     setFile(selected);
@@ -180,6 +218,13 @@ export function RetunePanel() {
           </span>
         )}
       </div>
+
+      <PresetControls
+        filename="pnkey-retune-preset.json"
+        getData={getPresetData}
+        onLoad={loadPresetData}
+        onError={setError}
+      />
 
       <button
         onClick={handleSubmit}

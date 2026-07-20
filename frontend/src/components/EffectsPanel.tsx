@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { downloadUrl, fetchEffectPresets, pollJobUntilDone, submitEffectJob, type EffectPreset } from "../lib/api";
 import { FileDrop } from "./FileDrop";
+import { PresetControls } from "./PresetControls";
 
 type Stage = "idle" | "uploading" | "processing" | "done" | "error";
+
+interface EffectsPresetData {
+  preset?: string;
+}
 
 export function EffectsPanel() {
   const [presets, setPresets] = useState<EffectPreset[]>([]);
@@ -24,6 +29,18 @@ export function EffectsPanel() {
 
   const canSubmit =
     file !== null && selectedPreset !== null && stage !== "uploading" && stage !== "processing";
+
+  function getPresetData(): EffectsPresetData {
+    return { preset: selectedPreset ?? undefined };
+  }
+
+  function loadPresetData(data: EffectsPresetData) {
+    if (typeof data.preset === "string" && presets.some((p) => p.slug === data.preset)) {
+      setSelectedPreset(data.preset);
+    } else {
+      setError("That preset file names an effect that isn't available here.");
+    }
+  }
 
   async function handleSubmit() {
     if (!file || !selectedPreset) return;
@@ -76,6 +93,13 @@ export function EffectsPanel() {
           </button>
         ))}
       </div>
+
+      <PresetControls
+        filename="pnkey-effect-preset.json"
+        getData={getPresetData}
+        onLoad={loadPresetData}
+        onError={setError}
+      />
 
       <button
         onClick={handleSubmit}
