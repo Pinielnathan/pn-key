@@ -48,7 +48,7 @@ export function FileDrop({ label, accept = "audio/*", file, onFileSelected }: Fi
         </p>
       ) : (
         <p className="text-sm text-zinc-400">
-          {label} — drag &amp; drop an audio file here, or click to browse
+          {label}. Drag and drop an audio file here, or click to browse.
         </p>
       )}
     </div>

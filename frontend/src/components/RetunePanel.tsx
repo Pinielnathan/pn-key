@@ -81,7 +81,7 @@ export function RetunePanel() {
       setDetected(true);
     } catch (err) {
       setAnalyzeError(
-        err instanceof Error ? err.message : "Couldn't auto-detect BPM/key — enter them manually below.",
+        err instanceof Error ? err.message : "Couldn't auto-detect BPM/key. Enter them manually below.",
       );
     } finally {
       setIsAnalyzing(false);
@@ -119,7 +119,7 @@ export function RetunePanel() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-100">Retune vocals</h2>
         <p className="text-sm text-zinc-400">
-          Upload a vocal track — its BPM and key are detected automatically — then pick what you want them
+          Upload a vocal track. Its BPM and key are detected automatically, then pick what you want them
           changed to.
         </p>
       </div>
@@ -129,7 +129,7 @@ export function RetunePanel() {
       {isAnalyzing && <p className="text-sm text-zinc-400">Detecting BPM &amp; key…</p>}
       {detected && !isAnalyzing && (
         <p className="text-sm text-brand-lime">
-          Detected automatically — adjust the original BPM/key below if it looks off (auto-detection is a
+          Detected automatically. Adjust the original BPM/key below if it looks off (auto-detection is a
           best effort, especially on a cappella vocals with no strong beat).
         </p>
       )}

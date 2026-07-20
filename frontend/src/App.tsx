@@ -21,7 +21,7 @@ export default function App() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-zinc-50 sm:text-2xl">PN Key</h1>
           <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-            Retune vocals, split songs into stems, or apply voice effects — every download keeps its BPM
+            Retune vocals, split songs into stems, or apply voice effects. Every download keeps its BPM
             and key as metadata.
           </p>
         </div>

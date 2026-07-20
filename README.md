@@ -4,7 +4,7 @@ A standalone tool with three features. Every download from any of them is a tagg
 
 1. **Retune** — upload a vocal recording, its BPM/key are detected automatically, tell it what BPM/key you want instead, and download the result. Target settings can be saved to / loaded from a small JSON preset file, so a repeat setup doesn't mean re-entering values by hand.
 2. **Separate** — upload a full song and split it into an isolated vocals stem and an instrumental/beat stem, download either one.
-3. **Effects** — upload a vocal, pick from 20 presets (Concert Hall, Telephone, Robot, Chipmunk, Deep Voice, Echo Chamber, Radio, Underwater, Haunted, Warm Vintage, Bright & Airy, Stadium Anthem, Intimate Whisper, Doubler, Lo-Fi Bedroom, Broadcast Polish, Cathedral, Megaphone, Alien, Giant), download the processed result. Same save/load preset file as Retune.
+3. **Effects** — upload a vocal, search or filter 30 presets across 5 categories (Space & Reverb, Character & Novelty, Lo-Fi & Retro, Vocal Polish, Mood), paginated 9 at a time, download the processed result. Same save/load preset file as Retune.
 
 Standalone project, unrelated to any other repo on this machine — its own frontend, backend, and deploy story.
 

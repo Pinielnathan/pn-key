@@ -132,7 +132,7 @@ async def create_separate_job(
 
 @app.get("/api/effects/presets")
 async def list_effect_presets():
-    return {"presets": effects.list_presets()}
+    return {"presets": effects.list_presets(), "categories": effects.list_categories()}
 
 
 @app.post("/api/jobs/effects")

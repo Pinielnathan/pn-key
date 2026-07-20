@@ -1,9 +1,18 @@
-import { useEffect, useState } from "react";
-import { downloadUrl, fetchEffectPresets, pollJobUntilDone, submitEffectJob, type EffectPreset } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import {
+  downloadUrl,
+  fetchEffectPresets,
+  pollJobUntilDone,
+  submitEffectJob,
+  type EffectCategory,
+  type EffectPreset,
+} from "../lib/api";
 import { FileDrop } from "./FileDrop";
 import { PresetControls } from "./PresetControls";
 
 type Stage = "idle" | "uploading" | "processing" | "done" | "error";
+
+const PAGE_SIZE = 9;
 
 interface EffectsPresetData {
   preset?: string;
@@ -11,8 +20,12 @@ interface EffectsPresetData {
 
 export function EffectsPanel() {
   const [presets, setPresets] = useState<EffectPreset[]>([]);
+  const [categories, setCategories] = useState<EffectCategory[]>([]);
   const [presetsError, setPresetsError] = useState<string | null>(null);
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [file, setFile] = useState<File | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -20,12 +33,39 @@ export function EffectsPanel() {
 
   useEffect(() => {
     fetchEffectPresets()
-      .then((list) => {
+      .then(({ presets: list, categories: cats }) => {
         setPresets(list);
+        setCategories(cats);
         setSelectedPreset((current) => current ?? list[0]?.slug ?? null);
       })
       .catch((err) => setPresetsError(err instanceof Error ? err.message : "Couldn't load presets"));
   }, []);
+
+  const filteredPresets = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return presets.filter((preset) => {
+      const matchesCategory = category === "all" || preset.category === category;
+      const matchesQuery =
+        query.length === 0 ||
+        preset.name.toLowerCase().includes(query) ||
+        preset.description.toLowerCase().includes(query);
+      return matchesCategory && matchesQuery;
+    });
+  }, [presets, search, category]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPresets.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagePresets = filteredPresets.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function updateSearch(value: string) {
+    setSearch(value);
+    setPage(1);
+  }
+
+  function updateCategory(value: string) {
+    setCategory(value);
+    setPage(1);
+  }
 
   const canSubmit =
     file !== null && selectedPreset !== null && stage !== "uploading" && stage !== "processing";
@@ -68,7 +108,7 @@ export function EffectsPanel() {
       <div>
         <h2 className="text-lg font-semibold text-zinc-100">Voice effects</h2>
         <p className="text-sm text-zinc-400">
-          Upload a vocal, pick a preset, and download the processed result.
+          Upload a vocal, pick from {presets.length || 30} presets, and download the processed result.
         </p>
       </div>
 
@@ -76,8 +116,34 @@ export function EffectsPanel() {
 
       {presetsError && <p className="text-sm text-red-400">{presetsError}</p>}
 
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input
+          type="text"
+          value={search}
+          onChange={(event) => updateSearch(event.target.value)}
+          placeholder="Search presets…"
+          className="flex-1 rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-lime focus:outline-none"
+        />
+        <select
+          value={category}
+          onChange={(event) => updateCategory(event.target.value)}
+          className="rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-lime focus:outline-none"
+        >
+          <option value="all">All categories</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filteredPresets.length === 0 && presets.length > 0 && (
+        <p className="text-sm text-zinc-500">No presets match that search.</p>
+      )}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {presets.map((preset) => (
+        {pagePresets.map((preset) => (
           <button
             key={preset.slug}
             onClick={() => setSelectedPreset(preset.slug)}
@@ -93,6 +159,28 @@ export function EffectsPanel() {
           </button>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 text-sm text-zinc-400">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+            className="rounded-md border border-zinc-700 px-2.5 py-1 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Prev
+          </button>
+          <span>
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+            className="rounded-md border border-zinc-700 px-2.5 py-1 hover:border-zinc-500 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       <PresetControls
         filename="pnkey-effect-preset.json"

@@ -75,12 +75,22 @@ export interface EffectPreset {
   slug: string;
   name: string;
   description: string;
+  category: string;
 }
 
-export async function fetchEffectPresets(): Promise<EffectPreset[]> {
+export interface EffectCategory {
+  id: string;
+  name: string;
+}
+
+export interface EffectPresetsResponse {
+  presets: EffectPreset[];
+  categories: EffectCategory[];
+}
+
+export async function fetchEffectPresets(): Promise<EffectPresetsResponse> {
   const res = await fetch(`${API_BASE}/api/effects/presets`);
-  const body = await parseJsonOrThrow<{ presets: EffectPreset[] }>(res);
-  return body.presets;
+  return parseJsonOrThrow<EffectPresetsResponse>(res);
 }
 
 export async function submitEffectJob(file: File, preset: string): Promise<{ job_id: string }> {
