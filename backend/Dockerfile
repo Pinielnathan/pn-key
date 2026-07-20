@@ -28,8 +28,8 @@ RUN python -c "from demucs.pretrained import get_model; get_model('htdemucs')" |
 
 RUN mkdir -p "$STORAGE_DIR"
 
-# 7860 is Hugging Face Spaces' expected Docker port (see README.md's
-# `app_port`). Other hosts (Railway/Render/etc.) inject their own $PORT at
-# runtime, which overrides this default.
+# 7860 is just this image's own default (matches Hugging Face Spaces'
+# convention, in case that's ever useful again). Cloud Run, Railway, Render
+# etc. all inject their own $PORT at runtime, which overrides this default.
 EXPOSE 7860
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

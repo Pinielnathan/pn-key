@@ -5,7 +5,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from . import audio_ops
+from . import audio_ops, effects
 from .config import ALLOWED_ORIGINS, MAX_UPLOAD_BYTES, STORAGE_DIR
 from .jobs import Job, create_job, get_job
 
@@ -73,6 +73,18 @@ def _run_separate(job: Job, input_path: Path) -> None:
         job.error = str(exc)
 
 
+def _run_effect(job: Job, input_path: Path, preset_slug: str) -> None:
+    try:
+        job.status = "processing"
+        output_path = job.dir / "output.wav"
+        audio_ops.apply_effect(input_path, output_path, preset_slug)
+        job.outputs["output"] = output_path
+        job.status = "done"
+    except Exception as exc:  # noqa: BLE001
+        job.status = "error"
+        job.error = str(exc)
+
+
 @app.post("/api/analyze")
 async def analyze_audio(file: UploadFile = File(...)):
     with tempfile.TemporaryDirectory(dir=STORAGE_DIR) as tmp_dir:
@@ -115,6 +127,29 @@ async def create_separate_job(
     await _save_upload(file, input_path)
 
     background_tasks.add_task(_run_separate, job, input_path)
+    return {"job_id": job.id, "status": job.status}
+
+
+@app.get("/api/effects/presets")
+async def list_effect_presets():
+    return {"presets": effects.list_presets()}
+
+
+@app.post("/api/jobs/effects")
+async def create_effect_job(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    preset: str = Form(...),
+):
+    available = {p["slug"] for p in effects.list_presets()}
+    if preset not in available:
+        raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
+
+    job = create_job("effects")
+    input_path = job.dir / f"input{_safe_suffix(file.filename)}"
+    await _save_upload(file, input_path)
+
+    background_tasks.add_task(_run_effect, job, input_path, preset)
     return {"job_id": job.id, "status": job.status}
 
 

@@ -1,6 +1,6 @@
 import { getApiBase } from "./backendUrl";
 
-export type JobKind = "retune" | "separate";
+export type JobKind = "retune" | "separate" | "effects";
 export type JobStatusValue = "queued" | "processing" | "done" | "error";
 
 export interface JobStatus {
@@ -74,6 +74,30 @@ export async function submitSeparateJob(file: File): Promise<{ job_id: string }>
   form.append("file", file);
 
   const res = await fetch(`${getApiBase()}/api/jobs/separate`, {
+    method: "POST",
+    body: form,
+  });
+  return parseJsonOrThrow(res);
+}
+
+export interface EffectPreset {
+  slug: string;
+  name: string;
+  description: string;
+}
+
+export async function fetchEffectPresets(): Promise<EffectPreset[]> {
+  const res = await fetch(`${getApiBase()}/api/effects/presets`);
+  const body = await parseJsonOrThrow<{ presets: EffectPreset[] }>(res);
+  return body.presets;
+}
+
+export async function submitEffectJob(file: File, preset: string): Promise<{ job_id: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("preset", preset);
+
+  const res = await fetch(`${getApiBase()}/api/jobs/effects`, {
     method: "POST",
     body: form,
   });

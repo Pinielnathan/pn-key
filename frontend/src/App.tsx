@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { BackendStatus } from "./components/BackendStatus";
+import { EffectsPanel } from "./components/EffectsPanel";
 import { RetunePanel } from "./components/RetunePanel";
 import { SeparatePanel } from "./components/SeparatePanel";
 
-type Tab = "retune" | "separate";
+type Tab = "retune" | "separate" | "effects";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "retune", label: "Retune" },
+  { id: "separate", label: "Separate" },
+  { id: "effects", label: "Effects" },
+];
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("retune");
@@ -15,7 +22,8 @@ export default function App() {
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-zinc-50 sm:text-2xl">PN Key</h1>
           <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-            Retune vocals to a new BPM and key, or split a song into vocal and instrumental stems.
+            Retune vocals, split songs into stems, or apply voice effects — every download keeps its BPM
+            and key as metadata.
           </p>
         </div>
       </header>
@@ -23,25 +31,22 @@ export default function App() {
       <BackendStatus />
 
       <div className="mb-6 flex gap-2 rounded-lg bg-ink-900 p-1">
-        <button
-          onClick={() => setTab("retune")}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "retune" ? "bg-brand-lime text-ink-950" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Retune
-        </button>
-        <button
-          onClick={() => setTab("separate")}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "separate" ? "bg-brand-lime text-ink-950" : "text-zinc-400 hover:text-zinc-200"
-          }`}
-        >
-          Separate
-        </button>
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              tab === id ? "bg-brand-lime text-ink-950" : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {tab === "retune" ? <RetunePanel /> : <SeparatePanel />}
+      {tab === "retune" && <RetunePanel />}
+      {tab === "separate" && <SeparatePanel />}
+      {tab === "effects" && <EffectsPanel />}
 
       <footer className="mt-12 text-xs text-zinc-600">Only upload audio you have the rights to process.</footer>
     </div>
