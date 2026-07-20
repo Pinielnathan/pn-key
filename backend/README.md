@@ -42,7 +42,7 @@ py -3.13 -m venv .venv
 powershell -ExecutionPolicy Bypass -File .\run_local.ps1
 ```
 
-It prints a public `https://*.trycloudflare.com` URL — paste that into the "Backend unreachable" panel on the live site. That URL changes every time you restart the script — the actual tradeoff of hosting this way for free, and why Cloud Run is the primary path now instead.
+It prints a public `https://*.trycloudflare.com` URL. Since the frontend now only reads `VITE_API_URL` at build time (no runtime override anymore), using this URL means setting it as `VITE_API_URL` on the frontend and redeploying — and doing that again every time the script restarts with a new URL. That's the actual tradeoff of hosting this way for free, and why Cloud Run is the primary path now instead.
 
 ## Docker
 

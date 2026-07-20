@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { BackendStatus } from "./components/BackendStatus";
 import { EffectsPanel } from "./components/EffectsPanel";
 import { RetunePanel } from "./components/RetunePanel";
 import { SeparatePanel } from "./components/SeparatePanel";
@@ -27,8 +26,6 @@ export default function App() {
           </p>
         </div>
       </header>
-
-      <BackendStatus />
 
       <div className="mb-6 flex gap-2 rounded-lg bg-ink-900 p-1">
         {TABS.map(({ id, label }) => (
