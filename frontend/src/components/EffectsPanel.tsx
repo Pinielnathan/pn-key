@@ -342,7 +342,8 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
       {previewUrl && <audio controls autoPlay src={previewUrl} className="w-full" />}
 
       <PresetControls
-        filename="pnkey-effect-preset.json"
+        filename="pnkey-effect-preset.pnkey"
+        kind="effects"
         getData={getPresetData}
         onLoad={loadPresetData}
         onError={setError}

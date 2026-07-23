@@ -442,7 +442,8 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
       {previewUrl && <audio controls autoPlay src={previewUrl} className="w-full" />}
 
       <PresetControls
-        filename="pnkey-retune-preset.json"
+        filename="pnkey-retune-preset.pnkey"
+        kind="retune"
         getData={getPresetData}
         onLoad={loadPresetData}
         onError={setError}

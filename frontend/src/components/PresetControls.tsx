@@ -3,17 +3,18 @@ import { downloadPresetFile, readPresetFile } from "../lib/presetFile";
 
 interface PresetControlsProps<T> {
   filename: string;
+  kind: string;
   getData: () => T;
   onLoad: (data: T) => void;
   onError?: (message: string) => void;
 }
 
-export function PresetControls<T>({ filename, getData, onLoad, onError }: PresetControlsProps<T>) {
+export function PresetControls<T>({ filename, kind, getData, onLoad, onError }: PresetControlsProps<T>) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     try {
-      const data = await readPresetFile<T>(file);
+      const data = await readPresetFile<T>(file, kind);
       onLoad(data);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Couldn't load that preset file.");
@@ -25,7 +26,7 @@ export function PresetControls<T>({ filename, getData, onLoad, onError }: Preset
       <span className="text-zinc-500">Preset file:</span>
       <button
         type="button"
-        onClick={() => downloadPresetFile(filename, getData())}
+        onClick={() => downloadPresetFile(filename, kind, getData())}
         className="rounded-lg border border-zinc-700 px-2.5 py-1 text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
       >
         Save current settings
@@ -40,7 +41,7 @@ export function PresetControls<T>({ filename, getData, onLoad, onError }: Preset
       <input
         ref={inputRef}
         type="file"
-        accept="application/json,.json"
+        accept=".pnkey"
         className="hidden"
         onChange={(event) => {
           const selected = event.target.files?.[0];
