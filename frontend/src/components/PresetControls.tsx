@@ -26,14 +26,14 @@ export function PresetControls<T>({ filename, getData, onLoad, onError }: Preset
       <button
         type="button"
         onClick={() => downloadPresetFile(filename, getData())}
-        className="rounded-md border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-zinc-500"
+        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
       >
         Save current settings
       </button>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="rounded-md border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-zinc-500"
+        className="rounded-lg border border-zinc-700 px-2.5 py-1 text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
       >
         Load from file
       </button>

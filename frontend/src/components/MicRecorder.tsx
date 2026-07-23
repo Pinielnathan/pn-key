@@ -143,19 +143,31 @@ export function MicRecorder({ onRecorded }: MicRecorderProps) {
           <button
             type="button"
             onClick={stop}
-            className="flex shrink-0 items-center gap-2 rounded-md border border-red-500 bg-red-500/10 px-3 py-1.5 text-red-400"
+            className="flex shrink-0 items-center gap-2.5 rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-1.5 text-red-400 transition-colors hover:border-red-500"
           >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-red-500" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+            </span>
             Stop ({seconds}s)
           </button>
-          <canvas ref={canvasRef} width={240} height={36} className="h-9 flex-1 rounded-md bg-ink-950" />
+          <canvas
+            ref={canvasRef}
+            width={240}
+            height={36}
+            className="h-9 flex-1 rounded-lg border border-white/5 bg-ink-950"
+          />
         </>
       ) : (
         <button
           type="button"
           onClick={start}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-zinc-300 hover:border-zinc-500"
+          className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
         >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+          </svg>
           Record from mic
         </button>
       )}

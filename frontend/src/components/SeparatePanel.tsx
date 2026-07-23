@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { downloadUrl, pollJobUntilDone, submitSeparateJob } from "../lib/api";
 import { downloadAllAsZip } from "../lib/downloadZip";
 import { loadFiles, saveFiles } from "../lib/fileStore";
 import { useResumableResults } from "../lib/useResumableResults";
+import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
+import { ResultStatus } from "./ResultStatus";
+import { Spinner } from "./Spinner";
 
 interface SeparatePanelProps {
   lastRecording: File | null;
@@ -99,22 +103,29 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
         lastRecording={lastRecording}
       />
 
-      <button
+      <motion.button
         onClick={handleSubmit}
         disabled={!canSubmit}
-        className="w-full rounded-md bg-brand-lime px-4 py-2 font-semibold text-ink-950 transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500"
+        whileTap={canSubmit ? { scale: 0.98 } : undefined}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
       >
+        {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning ? "Separating…" : files.length > 1 ? `Separate ${files.length} songs` : "Separate"}
-      </button>
+      </motion.button>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
 
       {doneJobIds.length >= 1 && (
         <button
           onClick={handleDownloadZip}
           disabled={isZipping}
-          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {isZipping && <Spinner className="h-3.5 w-3.5" />}
           {isZipping
             ? "Building ZIP…"
             : `Download all ${doneJobIds.length > 1 ? `${doneJobIds.length} songs' ` : ""}stems as ZIP`}
@@ -123,60 +134,36 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
 
       {results.length > 0 && (
         <div className="space-y-4">
-          {results.map((result, i) => (
-            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
+          <AnimatePresence initial={false}>
+            {results.map((result, i) => (
+              <motion.div
+                key={`${result.fileName}-${i}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.05 }}
+                className="rounded-xl border border-zinc-700 bg-ink-900 p-4"
+              >
+                <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
-              {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
-              {result.status === "processing" && <p className="text-sm text-zinc-400">Separating…</p>}
-              {result.status === "error" && <p className="text-sm text-red-400">{result.error}</p>}
+                <ResultStatus status={result.status} error={result.error} processingLabel="Separating…" />
 
-              {result.status === "done" && result.jobId && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-zinc-300">Vocals</p>
-                    <audio controls src={downloadUrl(result.jobId, "vocals")} className="w-full" />
-                    <div className="flex gap-2">
-                      <a
-                        href={downloadUrl(result.jobId, "vocals", "wav")}
-                        download
-                        className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                      >
-                        WAV
-                      </a>
-                      <a
-                        href={downloadUrl(result.jobId, "vocals", "mp3")}
-                        download
-                        className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                      >
-                        MP3
-                      </a>
+                {result.status === "done" && result.jobId && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-zinc-300">Vocals</p>
+                      <audio controls src={downloadUrl(result.jobId, "vocals")} className="w-full" />
+                      <DownloadButtons jobId={result.jobId} stem="vocals" />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-zinc-300">Instrumental / beat</p>
+                      <audio controls src={downloadUrl(result.jobId, "instrumental")} className="w-full" />
+                      <DownloadButtons jobId={result.jobId} stem="instrumental" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-zinc-300">Instrumental / beat</p>
-                    <audio controls src={downloadUrl(result.jobId, "instrumental")} className="w-full" />
-                    <div className="flex gap-2">
-                      <a
-                        href={downloadUrl(result.jobId, "instrumental", "wav")}
-                        download
-                        className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                      >
-                        WAV
-                      </a>
-                      <a
-                        href={downloadUrl(result.jobId, "instrumental", "mp3")}
-                        download
-                        className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                      >
-                        MP3
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </div>

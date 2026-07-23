@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   analyzeAudio,
   downloadUrl,
@@ -12,8 +13,11 @@ import { loadFiles, saveFiles } from "../lib/fileStore";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
 import { useLocalStorageState } from "../lib/useLocalStorageState";
 import { useResumableResults } from "../lib/useResumableResults";
+import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
+import { ResultStatus } from "./ResultStatus";
+import { Spinner } from "./Spinner";
 
 interface RetunePresetData {
   targetBpm?: number;
@@ -272,24 +276,66 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         lastRecording={lastRecording}
       />
 
-      {files.length === 1 && isAnalyzingSingle && <p className="text-sm text-zinc-400">Detecting BPM &amp; key…</p>}
-      {files.length === 1 && !isAnalyzingSingle && !singleAnalysisFailed && singleAnalysis && (
-        <p className="text-sm text-brand-lime">
-          Detected automatically. Adjust the original BPM/key below if it looks off (auto-detection is a
-          best effort, especially on a cappella vocals with no strong beat).
-        </p>
-      )}
-      {files.length === 1 && singleAnalysisFailed && (
-        <p className="text-sm text-amber-400">Couldn't auto-detect BPM/key. Enter them manually below.</p>
-      )}
-      {files.length > 1 && pendingAnalysisCount > 0 && (
-        <p className="text-sm text-zinc-400">Detecting BPM &amp; key for {pendingAnalysisCount} file(s)…</p>
-      )}
-      {files.length > 1 && pendingAnalysisCount === 0 && failedAnalysisCount > 0 && (
-        <p className="text-sm text-amber-400">
-          Couldn't detect BPM/key for {failedAnalysisCount} file(s); those will be skipped.
-        </p>
-      )}
+      <AnimatePresence mode="wait">
+        {files.length === 1 && isAnalyzingSingle && (
+          <motion.p
+            key="analyzing"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 text-sm text-zinc-400"
+          >
+            <Spinner className="h-3.5 w-3.5" />
+            Detecting BPM &amp; key…
+          </motion.p>
+        )}
+        {files.length === 1 && !isAnalyzingSingle && !singleAnalysisFailed && singleAnalysis && (
+          <motion.p
+            key="detected"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="text-sm text-brand-lime"
+          >
+            Detected automatically. Adjust the original BPM/key below if it looks off (auto-detection is a
+            best effort, especially on a cappella vocals with no strong beat).
+          </motion.p>
+        )}
+        {files.length === 1 && singleAnalysisFailed && (
+          <motion.p
+            key="failed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-sm text-amber-400"
+          >
+            Couldn't auto-detect BPM/key. Enter them manually below.
+          </motion.p>
+        )}
+        {files.length > 1 && pendingAnalysisCount > 0 && (
+          <motion.p
+            key="analyzing-multi"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 text-sm text-zinc-400"
+          >
+            <Spinner className="h-3.5 w-3.5" />
+            Detecting BPM &amp; key for {pendingAnalysisCount} file(s)…
+          </motion.p>
+        )}
+        {files.length > 1 && pendingAnalysisCount === 0 && failedAnalysisCount > 0 && (
+          <motion.p
+            key="failed-multi"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-sm text-amber-400"
+          >
+            Couldn't detect BPM/key for {failedAnalysisCount} file(s); those will be skipped.
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <label className="block text-sm">
@@ -300,7 +346,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             value={displaySourceBpm}
             disabled={files.length > 1}
             onChange={(event) => setSourceBpmOverride(event.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-zinc-100 focus:border-brand-lime focus:outline-none disabled:opacity-50"
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20 disabled:opacity-50"
             placeholder="e.g. 120"
           />
         </label>
@@ -311,7 +357,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             min={1}
             value={targetBpm}
             onChange={(event) => setTargetBpm(event.target.value)}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-zinc-100 focus:border-brand-lime focus:outline-none"
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20"
             placeholder="e.g. 128"
           />
         </label>
@@ -324,7 +370,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             value={displaySourceKey}
             disabled={useManualShift || files.length > 1}
             onChange={(event) => setSourceKeyOverride(Number(event.target.value))}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-zinc-100 focus:border-brand-lime focus:outline-none disabled:opacity-50"
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20 disabled:opacity-50"
           >
             {NOTE_NAMES.map((name, i) => (
               <option key={name} value={i}>
@@ -339,7 +385,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             value={targetKey}
             disabled={useManualShift}
             onChange={(event) => setTargetKey(Number(event.target.value))}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-zinc-100 focus:border-brand-lime focus:outline-none disabled:opacity-50"
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20 disabled:opacity-50"
           >
             {NOTE_NAMES.map((name, i) => (
               <option key={name} value={i}>
@@ -350,13 +396,13 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-sm">
         <label className="flex items-center gap-2 text-zinc-300">
           <input
             type="checkbox"
             checked={useManualShift}
             onChange={(event) => setUseManualShift(event.target.checked)}
-            className="accent-brand-lime"
+            className="h-4 w-4 accent-brand-lime"
           />
           Set semitone shift manually instead
         </label>
@@ -367,13 +413,15 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             max={24}
             value={manualShift}
             onChange={(event) => setManualShift(Number(event.target.value))}
-            className="w-24 rounded-md border border-zinc-700 bg-ink-900 px-2 py-1 text-zinc-100 focus:border-brand-lime focus:outline-none"
+            className="w-24 rounded-lg border border-zinc-700 bg-ink-900 px-2 py-1 text-zinc-100 outline-none focus:border-brand-lime"
           />
         ) : (
           <span className="text-zinc-500">
             {files.length > 1 ? "Computed per file from" : "Computed shift:"}{" "}
-            {files.length <= 1 && (computedShift > 0 ? `+${computedShift}` : computedShift)}
-            {files.length > 1 && `target key (${NOTE_NAMES[targetKey]})`}
+            <span className="font-medium text-zinc-300">
+              {files.length <= 1 && (computedShift > 0 ? `+${computedShift}` : computedShift)}
+              {files.length > 1 && `target key (${NOTE_NAMES[targetKey]})`}
+            </span>
           </span>
         )}
       </div>
@@ -382,8 +430,9 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         <button
           onClick={handlePreview}
           disabled={!canPreview}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
+          {isPreviewing && <Spinner className="h-3.5 w-3.5" />}
           {isPreviewing ? "Rendering preview…" : "Preview"}
         </button>
         <span className="text-xs text-zinc-500">
@@ -399,59 +448,57 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         onError={setError}
       />
 
-      <button
+      <motion.button
         onClick={handleSubmit}
         disabled={!canSubmit}
-        className="w-full rounded-md bg-brand-lime px-4 py-2 font-semibold text-ink-950 transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500"
+        whileTap={canSubmit ? { scale: 0.98 } : undefined}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
       >
+        {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning ? "Processing…" : files.length > 1 ? `Retune ${files.length} files` : "Retune"}
-      </button>
+      </motion.button>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
 
       {doneJobIds.length >= 2 && (
         <button
           onClick={handleDownloadZip}
           disabled={isZipping}
-          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {isZipping && <Spinner className="h-3.5 w-3.5" />}
           {isZipping ? "Building ZIP…" : `Download all ${doneJobIds.length} as ZIP`}
         </button>
       )}
 
       {results.length > 0 && (
         <div className="space-y-3">
-          {results.map((result, i) => (
-            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
+          <AnimatePresence initial={false}>
+            {results.map((result, i) => (
+              <motion.div
+                key={`${result.fileName}-${i}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.05 }}
+                className="rounded-xl border border-zinc-700 bg-ink-900 p-4"
+              >
+                <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
-              {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
-              {result.status === "processing" && <p className="text-sm text-zinc-400">Processing…</p>}
-              {result.status === "error" && <p className="text-sm text-red-400">{result.error}</p>}
+                <ResultStatus status={result.status} error={result.error} />
 
-              {result.status === "done" && result.jobId && (
-                <div className="space-y-2">
-                  <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
-                  <div className="flex gap-2">
-                    <a
-                      href={downloadUrl(result.jobId, "output", "wav")}
-                      download
-                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                    >
-                      WAV
-                    </a>
-                    <a
-                      href={downloadUrl(result.jobId, "output", "mp3")}
-                      download
-                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                    >
-                      MP3
-                    </a>
+                {result.status === "done" && result.jobId && (
+                  <div className="space-y-2">
+                    <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
+                    <DownloadButtons jobId={result.jobId} stem="output" />
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </div>

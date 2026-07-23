@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { MicRecorder } from "./MicRecorder";
 
 interface MultiFileDropProps {
@@ -51,10 +52,12 @@ export function MultiFileDrop({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div
-        className={`cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          isDragging ? "border-brand-lime bg-brand-lime/10" : "border-zinc-700 hover:border-zinc-500"
+        className={`group cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+          isDragging
+            ? "scale-[1.01] border-brand-lime bg-brand-lime/10 shadow-glow"
+            : "border-zinc-700 hover:border-zinc-500 hover:bg-white/[0.02]"
         }`}
         onClick={() => inputRef.current?.click()}
         onDragOver={(event) => {
@@ -75,8 +78,23 @@ export function MultiFileDrop({
             event.target.value = "";
           }}
         />
+        <svg
+          className={`mx-auto mb-3 h-8 w-8 transition-colors ${
+            isDragging ? "text-brand-lime" : "text-zinc-600 group-hover:text-zinc-400"
+          }`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
+          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
         <p className="text-sm text-zinc-400">
-          {label}. Drag and drop one or more audio files here, or click to browse.
+          <span className="font-medium text-zinc-300">{label}.</span> Drag and drop one or more audio
+          files here, or click to browse.
         </p>
       </div>
 
@@ -92,7 +110,7 @@ export function MultiFileDrop({
           <button
             type="button"
             onClick={() => addFiles([lastRecording])}
-            className="shrink-0 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500"
+            className="shrink-0 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100"
           >
             Use last recording
           </button>
@@ -101,24 +119,30 @@ export function MultiFileDrop({
 
       {files.length > 0 && (
         <ul className="space-y-1.5">
-          {files.map((f, i) => (
-            <li
-              key={`${f.name}-${i}-${f.size}`}
-              className="flex items-center justify-between gap-2 rounded-md border border-zinc-700 bg-ink-900 px-3 py-1.5 text-sm text-zinc-300"
-            >
-              <span className="truncate">
-                {f.name} <span className="text-zinc-500">({(f.size / (1024 * 1024)).toFixed(1)} MB)</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => removeFile(i)}
-                className="shrink-0 text-zinc-500 hover:text-red-400"
-                aria-label={`Remove ${f.name}`}
+          <AnimatePresence initial={false}>
+            {files.map((f, i) => (
+              <motion.li
+                key={`${f.name}-${i}-${f.size}`}
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: "auto", marginBottom: 6 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="flex items-center justify-between gap-2 overflow-hidden rounded-lg border border-zinc-700 bg-ink-900 px-3 py-1.5 text-sm text-zinc-300"
               >
-                ✕
-              </button>
-            </li>
-          ))}
+                <span className="truncate">
+                  {f.name} <span className="text-zinc-500">({(f.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(i)}
+                  className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-red-400"
+                  aria-label={`Remove ${f.name}`}
+                >
+                  ✕
+                </button>
+              </motion.li>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
     </div>

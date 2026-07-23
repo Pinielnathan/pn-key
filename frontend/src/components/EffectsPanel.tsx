@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   downloadUrl,
   fetchEffectPresets,
@@ -12,8 +13,11 @@ import { downloadAllAsZip } from "../lib/downloadZip";
 import { loadFiles, saveFiles } from "../lib/fileStore";
 import { useLocalStorageState } from "../lib/useLocalStorageState";
 import { useResumableResults } from "../lib/useResumableResults";
+import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
+import { ResultStatus } from "./ResultStatus";
+import { Spinner } from "./Spinner";
 
 const PAGE_SIZE = 9;
 const FILES_KEY = "pnkey:effects:files";
@@ -217,7 +221,11 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
         lastRecording={lastRecording}
       />
 
-      {presetsError && <p className="text-sm text-red-400">{presetsError}</p>}
+      {presetsError && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          {presetsError}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
@@ -225,12 +233,12 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
           value={search}
           onChange={(event) => updateSearch(event.target.value)}
           placeholder="Search presets…"
-          className="flex-1 rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-lime focus:outline-none"
+          className="flex-1 rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20"
         />
         <select
           value={category}
           onChange={(event) => updateCategory(event.target.value)}
-          className="rounded-md border border-zinc-700 bg-ink-900 px-3 py-2 text-sm text-zinc-100 focus:border-brand-lime focus:outline-none"
+          className="rounded-xl border border-zinc-700 bg-ink-900 px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors focus:border-brand-lime focus:ring-2 focus:ring-brand-lime/20"
         >
           <option value="all">All categories</option>
           {categories.map((cat) => (
@@ -247,25 +255,53 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
 
       <div className="flex items-center justify-between text-xs text-zinc-500">
         <span>Click to select. Pick more than one to chain them in order.</span>
-        {selectedPresets.length > 0 && <span>{selectedPresets.length} selected</span>}
+        {selectedPresets.length > 0 && (
+          <span className="rounded-full bg-brand-lime/10 px-2 py-0.5 font-medium text-brand-lime">
+            {selectedPresets.length} selected
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {pagePresets.map((preset) => (
-          <button
-            key={preset.slug}
-            onClick={() => togglePreset(preset.slug)}
-            title={preset.description}
-            className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-              selectedPresets.includes(preset.slug)
-                ? "border-brand-lime bg-brand-lime/10 text-brand-lime"
-                : "border-zinc-700 bg-ink-900 text-zinc-300 hover:border-zinc-500"
-            }`}
-          >
-            <span className="block font-medium">{preset.name}</span>
-            <span className="mt-0.5 block text-xs text-zinc-500 line-clamp-2">{preset.description}</span>
-          </button>
-        ))}
+        <AnimatePresence mode="popLayout">
+          {pagePresets.map((preset) => {
+            const selected = selectedPresets.includes(preset.slug);
+            return (
+              <motion.button
+                key={preset.slug}
+                layout
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => togglePreset(preset.slug)}
+                title={preset.description}
+                className={`relative rounded-xl border px-3 py-2.5 text-left text-sm transition-colors ${
+                  selected
+                    ? "border-brand-lime bg-brand-lime/10 text-brand-lime shadow-glow"
+                    : "border-zinc-700 bg-ink-900 text-zinc-300 hover:border-zinc-500"
+                }`}
+              >
+                {selected && (
+                  <svg
+                    className="absolute right-2 top-2 h-3.5 w-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                )}
+                <span className="block pr-4 font-medium">{preset.name}</span>
+                <span className="mt-0.5 block text-xs text-zinc-500 line-clamp-2">{preset.description}</span>
+              </motion.button>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {totalPages > 1 && (
@@ -273,7 +309,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={currentPage <= 1}
-            className="rounded-md border border-zinc-700 px-2.5 py-1 hover:border-zinc-500 disabled:opacity-40"
+            className="rounded-lg border border-zinc-700 px-2.5 py-1 transition-colors hover:border-zinc-500 disabled:opacity-40"
           >
             Prev
           </button>
@@ -283,7 +319,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
-            className="rounded-md border border-zinc-700 px-2.5 py-1 hover:border-zinc-500 disabled:opacity-40"
+            className="rounded-lg border border-zinc-700 px-2.5 py-1 transition-colors hover:border-zinc-500 disabled:opacity-40"
           >
             Next
           </button>
@@ -294,8 +330,9 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
         <button
           onClick={handlePreview}
           disabled={files.length === 0 || selectedPresets.length === 0 || isPreviewing}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
+          {isPreviewing && <Spinner className="h-3.5 w-3.5" />}
           {isPreviewing ? "Rendering preview…" : "Preview"}
         </button>
         <span className="text-xs text-zinc-500">
@@ -311,11 +348,13 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
         onError={setError}
       />
 
-      <button
+      <motion.button
         onClick={handleSubmit}
         disabled={!canSubmit}
-        className="w-full rounded-md bg-brand-lime px-4 py-2 font-semibold text-ink-950 transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500"
+        whileTap={canSubmit ? { scale: 0.98 } : undefined}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
       >
+        {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning
           ? "Applying…"
           : files.length > 1
@@ -323,53 +362,49 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
             : selectedPresets.length > 1
               ? `Apply ${selectedPresets.length} effects`
               : "Apply effect"}
-      </button>
+      </motion.button>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          {error}
+        </p>
+      )}
 
       {doneJobIds.length >= 2 && (
         <button
           onClick={handleDownloadZip}
           disabled={isZipping}
-          className="w-full rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          {isZipping && <Spinner className="h-3.5 w-3.5" />}
           {isZipping ? "Building ZIP…" : `Download all ${doneJobIds.length} as ZIP`}
         </button>
       )}
 
       {results.length > 0 && (
         <div className="space-y-3">
-          {results.map((result, i) => (
-            <div key={`${result.fileName}-${i}`} className="rounded-md border border-zinc-700 bg-ink-900 p-4">
-              <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
+          <AnimatePresence initial={false}>
+            {results.map((result, i) => (
+              <motion.div
+                key={`${result.fileName}-${i}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.05 }}
+                className="rounded-xl border border-zinc-700 bg-ink-900 p-4"
+              >
+                <p className="mb-2 truncate text-sm font-medium text-zinc-200">{result.fileName}</p>
 
-              {result.status === "queued" && <p className="text-sm text-zinc-500">Queued…</p>}
-              {result.status === "processing" && <p className="text-sm text-zinc-400">Applying…</p>}
-              {result.status === "error" && <p className="text-sm text-red-400">{result.error}</p>}
+                <ResultStatus status={result.status} error={result.error} processingLabel="Applying…" />
 
-              {result.status === "done" && result.jobId && (
-                <div className="space-y-2">
-                  <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
-                  <div className="flex gap-2">
-                    <a
-                      href={downloadUrl(result.jobId, "output", "wav")}
-                      download
-                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                    >
-                      WAV
-                    </a>
-                    <a
-                      href={downloadUrl(result.jobId, "output", "mp3")}
-                      download
-                      className="inline-block rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-ink-700"
-                    >
-                      MP3
-                    </a>
+                {result.status === "done" && result.jobId && (
+                  <div className="space-y-2">
+                    <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
+                    <DownloadButtons jobId={result.jobId} stem="output" />
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
     </div>
