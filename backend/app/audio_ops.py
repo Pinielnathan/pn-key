@@ -44,14 +44,38 @@ def key_name(index: int, is_minor: bool) -> str:
     return f"{_NOTE_NAMES[index % 12]}{'m' if is_minor else ''}"
 
 
+def _estimate_bpm(y: np.ndarray, sr: int) -> float:
+    # A blanket "fold anything outside typical song range back into it"
+    # correction was tried and measured here: it didn't fix librosa's own
+    # half-time misreads (those already land inside the "typical" range, so
+    # there's nothing to fold), and it broke genuinely slow, correctly
+    # detected tempos by doubling them into a wrong answer. Reporting the
+    # raw estimate is more trustworthy than that heuristic was.
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    return float(np.asarray(tempo).reshape(-1)[0])
+
+
 def analyze(input_path: Path) -> dict:
     """Best-effort BPM and key detection. Meant as a starting point the user can correct."""
     y, sr = librosa.load(str(input_path), sr=None, mono=True, duration=ANALYZE_DURATION_SECONDS)
 
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = float(np.asarray(tempo).reshape(-1)[0])
+    # A recording's leading/trailing dead air (the beat before someone
+    # starts singing after hitting record, a trailing pause) doesn't help
+    # either estimate and can bias them — trim it first. Fall back to the
+    # untrimmed signal if trimming left almost nothing (e.g. very quiet
+    # source audio that isn't actually silence).
+    y_trimmed, _ = librosa.effects.trim(y)
+    if y_trimmed.size > sr:
+        y = y_trimmed
 
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    bpm = _estimate_bpm(y, sr)
+
+    # Harmonic-percussive separation before chroma: percussive transients —
+    # drums, or breath/plosive noise in a vocal recording — smear the pitch
+    # content chroma is built from and are a common source of wrong key
+    # guesses, so key detection runs on the harmonic component only.
+    y_harmonic = librosa.effects.harmonic(y, margin=8)
+    chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr)
     key_index, is_minor = _estimate_key(chroma.mean(axis=1))
 
     return {"bpm": round(bpm, 1), "key_index": key_index, "key_name": key_name(key_index, is_minor)}
