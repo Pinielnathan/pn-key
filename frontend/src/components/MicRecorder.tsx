@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import fixWebmDuration from "fix-webm-duration";
 
 interface MicRecorderProps {
   onRecorded: (file: File) => void;
@@ -19,6 +20,7 @@ export function MicRecorder({ onRecorded }: MicRecorderProps) {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const startedAtRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -99,10 +101,21 @@ export function MicRecorder({ onRecorded }: MicRecorderProps) {
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         const extension = blob.type.includes("mp4") ? "mp4" : "webm";
-        onRecorded(new File([blob], `recording.${extension}`, { type: blob.type }));
+        const durationMs = Date.now() - startedAtRef.current;
+
+        // Chrome/Edge write WEBM blobs from MediaRecorder with no duration in
+        // the container header (it's a live stream, so the length is
+        // "unknown" until you fix it up afterwards). Without this, playing
+        // the recording back immediately jumps to the end instead of
+        // playing — this patches the real duration into the blob's bytes.
+        const finalBlob = blob.type.includes("webm")
+          ? await fixWebmDuration(blob, durationMs, { logger: false })
+          : blob;
+
+        onRecorded(new File([finalBlob], `recording.${extension}`, { type: blob.type }));
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       };
@@ -111,6 +124,7 @@ export function MicRecorder({ onRecorded }: MicRecorderProps) {
       recorderRef.current = recorder;
       setIsRecording(true);
       setSeconds(0);
+      startedAtRef.current = Date.now();
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
       setError("Microphone access was denied or unavailable.");
