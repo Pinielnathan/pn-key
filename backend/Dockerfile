@@ -14,6 +14,17 @@ ENV HOME=/home/appuser \
     STORAGE_DIR=/home/appuser/jobs \
     PORT=7860
 
+# Pin the maths-library thread pools to the vCPU count this is deployed with
+# (see the backend README's `gcloud run deploy`). Left unset, Torch sizes its
+# pool from the host's core count rather than the container's CPU limit, and
+# oversubscribing a 8-vCPU container measured 30% slower on a real separation
+# (180s -> 138s once these were set). Baked in here rather than passed at deploy
+# time because `--set-env-vars` replaces the whole environment, so it only takes
+# one deploy that forgets them to silently give the slowdown back.
+# Override both if deploying with a different --cpu.
+ENV OMP_NUM_THREADS=8 \
+    MKL_NUM_THREADS=8
+
 WORKDIR /home/appuser/app
 
 COPY --chown=appuser requirements.txt .

@@ -12,12 +12,31 @@ gcloud run deploy pn-key-backend \
   --allow-unauthenticated \
   --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw \
   --memory 4Gi \
-  --cpu 2 \
+  --cpu 8 \
   --timeout 300 \
   --no-cpu-throttling \
   --max-instances 1 \
   --concurrency 20
 ```
+
+### Separation speed
+
+A 3m20s track separates in about **140s**, down from ~380s. In order of what each change was worth:
+
+| Change | Effect |
+|---|---|
+| `--cpu 8` (was 2) | 380s → 180s |
+| `OMP_NUM_THREADS` / `MKL_NUM_THREADS` pinned to the vCPU count (set in the Dockerfile) | 180s → 138s |
+| Demucs `--overlap` 0.1 (was 0.25) | ~23% of the Demucs portion |
+| Detection at 22.05kHz with a halved hop length | 9.8s → 2.8s |
+| librosa/numba JIT warmed at startup | ~20s off the first request after a cold start |
+
+More cores is close to cost-neutral rather than a splurge: Cloud Run bills CPU-seconds, so 4× the cores for roughly ¼ the wall time is about the same money per job, and less on memory-seconds. The old 2-vCPU setting was paying nearly the same to be four times slower.
+
+**The rest is Demucs on a CPU, which is near its floor here.** `--segment` is already at 7, the largest window htdemucs accepts, and the overlap is already cut. Going meaningfully faster means changing the hardware or the model, and both are trade-offs rather than free wins:
+
+- **A GPU** (`--gpu 1 --gpu-type nvidia-l4`) would put separation in the 10–20s range, but needs a CUDA build of Torch, is limited to certain regions, and bills at a much higher rate while active.
+- **A lighter model** (`mdx_extra_q` via `DEMUCS_MODEL`) is faster than htdemucs but needs the `diffq` dependency and separates less cleanly — reasonable as an opt-in "fast mode", not as the default.
 
 `--source .` builds `Dockerfile` directly on Cloud Run's build infra and deploys it — no local Docker install needed. `--allow-unauthenticated` is required since the frontend calls this over plain HTTPS with no auth. `--timeout 300` covers longer separation jobs. Cloud Run prints a stable `https://pn-key-backend-<hash>-<region>.a.run.app` URL that doesn't change between deploys — set that as `VITE_API_URL` on the frontend once.
 
