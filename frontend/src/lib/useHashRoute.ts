@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 export const TOOLS = ["retune", "separate", "effects"] as const;
 export type Tool = (typeof TOOLS)[number];
 
-export const PAGES = ["home", "board", "help", "admin"] as const;
+export const PAGES = ["home", "board", "help", "pegasus"] as const;
 export type Page = (typeof PAGES)[number];
 
 export interface Route {
@@ -19,7 +19,11 @@ function parseHash(): Partial<Route> {
   if ((TOOLS as readonly string[]).includes(raw)) return { page: "home", tool: raw as Tool };
   if (raw === "board" || raw === "suggestions") return { page: "board" };
   if (raw === "help" || raw === "faq") return { page: "help" };
-  if (raw === "admin") return { page: "admin" };
+  // Deliberately not "admin". Renaming it only makes the page harder to stumble
+  // onto, which is worth something against drive-by curiosity but is not what
+  // protects it: every write behind this page is gated on the server by
+  // ADMIN_TOKEN, and would be just as safe at a guessable URL.
+  if (raw === "pegasus") return { page: "pegasus" };
   return {};
 }
 

@@ -156,6 +156,8 @@ export interface FeedbackReply {
   id: string;
   name: string;
   text: string;
+  /** Set on replies posted from the admin page, shown as an answer not an opinion. */
+  official?: boolean;
   created_at: number;
 }
 
@@ -264,6 +266,34 @@ export async function adminSetStatus(key: string, id: string, status: string): P
     body: JSON.stringify({ status }),
   });
   return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+/** Status change and official answer as one write, so a save can't half-apply. */
+export async function adminUpdateItem(
+  key: string,
+  id: string,
+  update: { status?: string; reply_text?: string; reply_name?: string },
+): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/admin/feedback/${id}`, {
+    method: "PATCH",
+    headers: adminHeaders(key),
+    body: JSON.stringify(update),
+  });
+  return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+export async function adminBulk(
+  key: string,
+  action: "delete" | "status",
+  ids: string[],
+  status?: string,
+): Promise<{ deleted?: number; updated?: number }> {
+  const res = await fetch(`${API_BASE}/api/admin/feedback/bulk`, {
+    method: "POST",
+    headers: adminHeaders(key),
+    body: JSON.stringify({ action, ids, status }),
+  });
+  return parseJsonOrThrow(res);
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {

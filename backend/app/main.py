@@ -51,6 +51,18 @@ class StatusUpdate(BaseModel):
     status: str
 
 
+class AdminItemUpdate(BaseModel):
+    status: str | None = None
+    reply_text: str | None = Field(default=None, max_length=5000)
+    reply_name: str | None = Field(default=None, max_length=200)
+
+
+class BulkAction(BaseModel):
+    action: str
+    ids: list[str] = Field(default_factory=list, max_length=500)
+    status: str | None = None
+
+
 # Job state lives in this process's memory, so anything that restarts the
 # process drops it. A poll for a job we don't have is therefore much more often
 # "the server restarted underneath it" than a genuinely bogus id, and the bare
@@ -493,6 +505,57 @@ async def admin_set_status(item_id: str, payload: StatusUpdate, _: None = Depend
             detail=f"Status must be one of: {', '.join(feedback.STATUSES)}",
         )
     return item
+
+
+@app.patch("/api/admin/feedback/{item_id}")
+async def admin_update_item(item_id: str, payload: AdminItemUpdate, _: None = Depends(_require_admin)):
+    """One write for what the admin page treats as one edit: status plus answer.
+
+    Admin replies skip the profanity blocklist that public posts go through.
+    That filter exists to keep strangers civil on someone else's site; applying
+    it to the site's owner would just mean being refused on your own board, and
+    the length limit still applies either way.
+    """
+    reply = None
+    if payload.reply_text and payload.reply_text.strip():
+        text = payload.reply_text.strip()
+        if len(text) > moderation.MAX_TEXT_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Replies are limited to {moderation.MAX_TEXT_LENGTH} characters.",
+            )
+        reply = {"name": (payload.reply_name or "").strip() or "PN Key", "text": text}
+
+    if payload.status is None and reply is None:
+        raise HTTPException(status_code=400, detail="Nothing to change.")
+
+    item = feedback.update_item(item_id, status=payload.status, reply=reply)
+    if item is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown entry, or status must be one of: {', '.join(feedback.STATUSES)}",
+        )
+    return item
+
+
+@app.post("/api/admin/feedback/bulk")
+async def admin_bulk(payload: BulkAction, _: None = Depends(_require_admin)):
+    if not payload.ids:
+        raise HTTPException(status_code=400, detail="No entries selected.")
+
+    if payload.action == "delete":
+        return {"deleted": feedback.delete_items(payload.ids)}
+    if payload.action == "status":
+        if not payload.status:
+            raise HTTPException(status_code=400, detail="A status is required for this action.")
+        changed = feedback.set_status_many(payload.ids, payload.status)
+        if changed == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Status must be one of: {', '.join(feedback.STATUSES)}",
+            )
+        return {"updated": changed}
+    raise HTTPException(status_code=400, detail="Unknown action.")
 
 
 @app.get("/api/admin/overview")

@@ -301,7 +301,7 @@ export default function App() {
                 </section>
               )}
 
-              {route.page === "admin" && (
+              {route.page === "pegasus" && (
                 <section className="mx-auto max-w-3xl px-4 pb-16 pt-4">
                   <Admin />
                 </section>

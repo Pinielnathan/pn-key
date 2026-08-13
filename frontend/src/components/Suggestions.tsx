@@ -71,12 +71,34 @@ function ReplyThread({
           >
             <div className="mt-3 space-y-2 border-l border-white/10 pl-3">
               {replies.map((reply) => (
-                <div key={reply.id}>
+                <div
+                  key={reply.id}
+                  className={
+                    reply.official
+                      ? "rounded-lg border border-brand-lime/20 bg-brand-lime/[0.04] px-2.5 py-2"
+                      : undefined
+                  }
+                >
                   <div className="flex flex-wrap items-center gap-x-2">
-                    <span className="text-xs font-semibold text-zinc-300">{reply.name}</span>
+                    <span
+                      className={`text-xs font-semibold ${reply.official ? "text-brand-lime" : "text-zinc-300"}`}
+                    >
+                      {reply.name}
+                    </span>
+                    {reply.official && (
+                      <span className="rounded-full bg-brand-lime/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-lime">
+                        maintainer
+                      </span>
+                    )}
                     <span className="text-[11px] text-zinc-600">{timeAgo(reply.created_at)}</span>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-400">{reply.text}</p>
+                  <p
+                    className={`whitespace-pre-wrap text-sm leading-relaxed ${
+                      reply.official ? "text-zinc-300" : "text-zinc-400"
+                    }`}
+                  >
+                    {reply.text}
+                  </p>
                 </div>
               ))}
 

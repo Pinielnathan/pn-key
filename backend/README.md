@@ -82,7 +82,17 @@ The whole list is rewritten per write rather than appended to, which is only saf
 
 ### Admin
 
-`/#/admin` on the site is the moderation page: take entries or replies down, and set a status (open, planned, in-progress, done, declined). It isn't linked from the nav; you reach it by URL.
+`/#/pegasus` on the site is the moderation page. It isn't linked from the nav, and the path is deliberately not `/#/admin`.
+
+**That rename is obscurity, not security, and shouldn't be mistaken for it.** It keeps the page off the first thing anyone types, and that's all it does. What actually protects it is `ADMIN_TOKEN`: every write is refused without the key regardless of which URL the page is served at, so the page would be equally safe at `/#/admin` and is not made safe by being called something else.
+
+What it does:
+
+- **Answer with a status.** Stock replies (planned, working on it, shipped, fixed, need detail, can't reproduce, duplicate, not planned) each carry the status that answer implies, because in practice they're one decision: saying "this is live now" while leaving the entry open is its own kind of unanswered. The text lands editable, and the ones that need a reason end mid-sentence on purpose so a bare refusal can't be posted by accident. Admin replies are marked `official` and render as an answer from the maintainer rather than one more opinion.
+- **Staged edits with a Save button.** Status changes and answers are held as drafts, the card is outlined and marked unsaved, and a fixed bar counts them and commits them together. Each entry saves as one request carrying both fields, so a save can't half-apply and leave a status change with no explanation attached. A partial failure keeps the unsaved drafts on screen rather than dropping them, and leaving the page with drafts pending warns first.
+- **Bulk actions**: select all shown, then set a status or delete in one request.
+- **Search, filter and sort** by text, name, reply body, kind, status, votes, recency or reply count.
+- **Export** the board as JSON, and counts by status at a glance.
 
 Every admin route is guarded by a shared secret in `ADMIN_TOKEN`, sent as an `X-Admin-Token` header and compared with `secrets.compare_digest` so a wrong key can't be narrowed down by timing the failure. **With `ADMIN_TOKEN` unset every admin route returns 503 rather than falling back to a default** — an admin API that ships with a known password looks protected while being open to anyone who reads the source, which is strictly worse than one that's switched off.
 

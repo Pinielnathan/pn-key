@@ -112,11 +112,14 @@ def add_item(name: str, kind: str, text: str) -> dict:
     return item
 
 
-def add_reply(item_id: str, name: str, text: str) -> dict | None:
+def add_reply(item_id: str, name: str, text: str, official: bool = False) -> dict | None:
     reply = {
         "id": uuid.uuid4().hex,
         "name": name,
         "text": text,
+        # Marks a reply from the maintainer, so the board can show it as an
+        # answer rather than as one more opinion from a stranger.
+        "official": official,
         "created_at": time.time(),
     }
     with _lock:
@@ -128,6 +131,67 @@ def add_reply(item_id: str, name: str, text: str) -> dict | None:
                 _save(items)
                 return item
     return None
+
+
+def update_item(item_id: str, status: str | None = None, reply: dict | None = None) -> dict | None:
+    """Applies a status change and/or an official reply in one write.
+
+    Both together because the admin page stages edits and commits them with a
+    Save button: answering "planned, because it needs the GPU work first" is one
+    intent, and splitting it into two requests means it can half-apply, leaving
+    a status change with no explanation attached to it.
+    """
+    if status is not None and status not in STATUSES:
+        return None
+
+    with _lock:
+        items = _load()
+        for item in items:
+            if item["id"] != item_id:
+                continue
+            if status is not None:
+                item["status"] = status
+            if reply is not None:
+                item.setdefault("replies", []).append(
+                    {
+                        "id": uuid.uuid4().hex,
+                        "name": reply.get("name") or "PN Key",
+                        "text": reply["text"],
+                        "official": True,
+                        "created_at": time.time(),
+                    }
+                )
+            _save(items)
+            return item
+    return None
+
+
+def delete_items(item_ids: list[str]) -> int:
+    """Bulk delete, one write instead of one per entry."""
+    wanted = set(item_ids)
+    with _lock:
+        items = _load()
+        remaining = [i for i in items if i["id"] not in wanted]
+        removed = len(items) - len(remaining)
+        if removed:
+            _save(remaining)
+        return removed
+
+
+def set_status_many(item_ids: list[str], status: str) -> int:
+    if status not in STATUSES:
+        return 0
+    wanted = set(item_ids)
+    with _lock:
+        items = _load()
+        changed = 0
+        for item in items:
+            if item["id"] in wanted:
+                item["status"] = status
+                changed += 1
+        if changed:
+            _save(items)
+        return changed
 
 
 def delete_item(item_id: str) -> bool:
