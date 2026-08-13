@@ -1,6 +1,7 @@
 import json
 import re
 import tempfile
+import threading
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
@@ -151,6 +152,43 @@ def _run_effect(job: Job, input_path: Path, preset_slugs: list[str]) -> None:
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
         job.error = str(exc)
+
+
+def _warm_up() -> None:
+    """Pay librosa's one-off JIT cost at startup instead of on someone's first upload.
+
+    librosa's beat tracking and HPSS are numba-compiled on first call, which cost
+    ~20s the first time and ~3s every time after. Since the container scales to
+    zero, that compile landed on a real user's first job often enough to matter —
+    it was most of why the very first separation looked so much slower than the
+    next one. Running it here against a scrap of generated audio means the
+    container absorbs it while it's still warming up, before it takes traffic.
+    """
+    try:
+        import numpy as np
+        import soundfile as sf
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "warmup.wav"
+            sample_rate = audio_ops.ANALYZE_SAMPLE_RATE
+            t = np.linspace(0, 4.0, int(sample_rate * 4.0), endpoint=False)
+            # A click track over a tone: gives the beat tracker and the chroma
+            # estimator each something real to compile against.
+            tone = 0.3 * np.sin(2 * np.pi * 220 * t)
+            clicks = 0.5 * (np.sin(2 * np.pi * 8 * t) > 0.98)
+            sf.write(str(path), tone + clicks, sample_rate)
+            audio_ops.analyze(path)
+    except Exception:  # noqa: BLE001
+        # Warm-up is an optimisation; if it fails the first real request just
+        # pays the compile as it did before. Never block startup on it.
+        pass
+
+
+@app.on_event("startup")
+def _schedule_warm_up() -> None:
+    # In a thread so the container reports ready immediately — Cloud Run starts
+    # its startup probe right away, and blocking here would delay serving.
+    threading.Thread(target=_warm_up, daemon=True).start()
 
 
 @app.post("/api/analyze")

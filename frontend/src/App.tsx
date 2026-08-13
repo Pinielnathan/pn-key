@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { EffectsPanel } from "./components/EffectsPanel";
 import { Faq } from "./components/Faq";
@@ -7,9 +7,9 @@ import { Reveal } from "./components/Reveal";
 import { RetunePanel } from "./components/RetunePanel";
 import { SeparatePanel } from "./components/SeparatePanel";
 import { loadFile, saveFile } from "./lib/fileStore";
-import { useLocalStorageState } from "./lib/useLocalStorageState";
+import { useHashRoute, type Tool } from "./lib/useHashRoute";
 
-type Tab = "retune" | "separate" | "effects";
+type Tab = Tool;
 
 const TABS: { id: Tab; label: string; blurb: string; icon: JSX.Element }[] = [
   {
@@ -43,8 +43,22 @@ const STEPS = [
 const LAST_RECORDING_KEY = "pnkey:lastRecording";
 
 export default function App() {
-  const [tab, setTab] = useLocalStorageState<Tab>("pnkey:tab", "retune");
+  const [tab, setTab] = useHashRoute();
   const [lastRecording, setLastRecordingState] = useState<File | null>(null);
+  const toolRef = useRef<HTMLElement>(null);
+
+  // Picking a tool should take you to it — otherwise choosing from up in the
+  // hero silently swaps a panel that's still below the fold.
+  const selectTool = useCallback(
+    (next: Tab) => {
+      setTab(next);
+      toolRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    },
+    [setTab],
+  );
 
   useEffect(() => {
     loadFile(LAST_RECORDING_KEY)
@@ -75,28 +89,31 @@ export default function App() {
 
       <div className="relative z-10">
         <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
-          <motion.a
-            href="#top"
+          <motion.button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="flex items-center gap-2.5"
+            aria-label="Back to top"
           >
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-brand-lime/20 blur-lg" aria-hidden />
               <img src="/logo.png" alt="" className="relative h-9 w-auto" />
             </div>
             <span className="text-base font-bold tracking-tight text-zinc-50">PN Key</span>
-          </motion.a>
-          <motion.a
-            href="#tool"
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={() => selectTool(tab)}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
             className="rounded-lg border border-white/10 px-3.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:border-brand-lime/50 hover:text-brand-lime"
           >
             Open the tool
-          </motion.a>
+          </motion.button>
         </header>
 
         {/* ---------- Hero ---------- */}
@@ -133,8 +150,9 @@ export default function App() {
             <p className="mt-2 text-xs text-zinc-600">Move your cursor across the waveform</p>
           </motion.div>
 
-          <motion.a
-            href="#tool"
+          <motion.button
+            type="button"
+            onClick={() => selectTool(tab)}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.36 }}
@@ -142,20 +160,21 @@ export default function App() {
             whileTap={{ scale: 0.97 }}
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-lime px-6 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark"
           >
-            Start processing — free
+            Start processing
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
-          </motion.a>
+          </motion.button>
         </section>
 
         {/* ---------- The tool ---------- */}
-        <section id="tool" className="mx-auto max-w-2xl scroll-mt-6 px-4 py-12 sm:py-16">
+        <section ref={toolRef} id="tool" className="mx-auto max-w-2xl scroll-mt-6 px-4 py-12 sm:py-16">
           <div className="mb-5 grid gap-2 sm:grid-cols-3">
             {TABS.map(({ id, label, icon }) => (
               <motion.button
                 key={id}
-                onClick={() => setTab(id)}
+                onClick={() => selectTool(id)}
+                aria-current={tab === id ? "page" : undefined}
                 whileTap={{ scale: 0.97 }}
                 className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
                   tab === id

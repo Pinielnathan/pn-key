@@ -13,6 +13,7 @@ import { downloadAllAsZip } from "../lib/downloadZip";
 import { loadFiles, saveFiles } from "../lib/fileStore";
 import { useLocalStorageState } from "../lib/useLocalStorageState";
 import { useResumableResults } from "../lib/useResumableResults";
+import { ClearButton } from "./ClearButton";
 import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
@@ -139,6 +140,18 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
 
   const canSubmit = files.length > 0 && selectedPresets.length > 0 && !isRunning;
 
+  function handleClear() {
+    setFiles([]);
+    saveFiles(FILES_KEY, []).catch(() => {});
+    setResults([]);
+    setError(null);
+    setSelectedPresets([]);
+    setPreviewUrl((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
+  }
+
   function getPresetData(): EffectsPresetData {
     return { presets: selectedPresets.length > 0 ? selectedPresets : undefined };
   }
@@ -207,7 +220,13 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100">Voice effects</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Voice effects</h2>
+          <ClearButton
+            show={files.length > 0 || results.length > 0 || selectedPresets.length > 0}
+            onClear={handleClear}
+          />
+        </div>
         <p className="text-sm text-zinc-400">
           Upload one or more vocals, pick from {presets.length || 30} presets (combine several to chain
           them), and download the processed result.

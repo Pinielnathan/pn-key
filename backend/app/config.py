@@ -22,8 +22,14 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(31 * 1024 * 1024))
 DEMUCS_MODEL = os.environ.get("DEMUCS_MODEL", "htdemucs")
 
 # Seconds of audio Demucs processes per window. See the call site in audio_ops
-# for why this is pinned rather than left to default to the whole track.
+# for why this is pinned rather than left to default to the whole track. 7 is
+# also the largest value htdemucs accepts (its training segment is 7.8s and the
+# flag takes an int), so this is simultaneously the memory cap and the fastest
+# setting — bigger windows would mean fewer of them, but the model won't take one.
 DEMUCS_SEGMENT = int(os.environ.get("DEMUCS_SEGMENT", "7"))
+
+# Fraction of each window recomputed to cross-fade the seams. See the call site.
+DEMUCS_OVERLAP = float(os.environ.get("DEMUCS_OVERLAP", "0.1"))
 
 # How many uploads may be processed at once. Each in-flight separation holds a
 # model and its activations in memory, so N at once costs roughly N times the

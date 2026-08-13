@@ -13,6 +13,7 @@ import { loadFiles, saveFiles } from "../lib/fileStore";
 import { NOTE_NAMES, semitoneShiftBetween } from "../lib/keys";
 import { useLocalStorageState } from "../lib/useLocalStorageState";
 import { useResumableResults } from "../lib/useResumableResults";
+import { ClearButton } from "./ClearButton";
 import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
@@ -118,6 +119,20 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
     }
 
     analyzeNewFiles(newFiles);
+  }
+
+  function handleClear() {
+    setFiles([]);
+    saveFiles(FILES_KEY, []).catch(() => {});
+    setResults([]);
+    setError(null);
+    setAnalysisByFile(new Map());
+    setSourceBpmOverride(null);
+    setSourceKeyOverride(null);
+    setPreviewUrl((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
   }
 
   function effectiveSourceFor(file: File): { bpm: number; keyIndex: number } | null {
@@ -262,7 +277,10 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100">Retune vocals</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Retune vocals</h2>
+          <ClearButton show={files.length > 0 || results.length > 0} onClear={handleClear} />
+        </div>
         <p className="text-sm text-zinc-400">
           Upload one or more vocal tracks. BPM and key are detected automatically, then pick what you want
           them changed to.

@@ -4,6 +4,7 @@ import { downloadUrl, pollJobUntilDone, submitSeparateJob } from "../lib/api";
 import { downloadAllAsZip } from "../lib/downloadZip";
 import { loadFiles, saveFiles } from "../lib/fileStore";
 import { useResumableResults } from "../lib/useResumableResults";
+import { ClearButton } from "./ClearButton";
 import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { ResultStatus } from "./ResultStatus";
@@ -38,6 +39,12 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
   }
 
   const canSubmit = files.length > 0 && !isRunning;
+
+  function handleClear() {
+    updateFiles([]);
+    setResults([]);
+    setError(null);
+  }
 
   async function runOne(file: File, index: number) {
     try {
@@ -88,7 +95,10 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-zinc-100">Separate songs</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-lg font-semibold text-zinc-100">Separate songs</h2>
+          <ClearButton show={files.length > 0 || results.length > 0} onClear={handleClear} />
+        </div>
         <p className="text-sm text-zinc-400">
           Upload one or more full songs and split each into an isolated vocal stem and an
           instrumental/beat stem. Separation quality depends on the mix, and processing can take a while
