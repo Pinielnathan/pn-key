@@ -150,6 +150,34 @@ export async function previewRetune(params: {
   return blobOrThrow(res);
 }
 
+export interface Review {
+  id: string;
+  name: string;
+  rating: number;
+  text: string;
+  created_at: number;
+}
+
+export interface ReviewsResponse {
+  reviews: Review[];
+  count: number;
+  average: number | null;
+}
+
+export async function fetchReviews(): Promise<ReviewsResponse> {
+  const res = await fetch(`${API_BASE}/api/reviews`);
+  return parseJsonOrThrow<ReviewsResponse>(res);
+}
+
+export async function submitReview(input: { name: string; rating: number; text: string }): Promise<Review> {
+  const res = await fetch(`${API_BASE}/api/reviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJsonOrThrow<Review>(res);
+}
+
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   const res = await fetch(`${API_BASE}/api/jobs/${jobId}`);
   return parseJsonOrThrow(res);

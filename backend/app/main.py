@@ -2,14 +2,30 @@ import json
 import re
 import tempfile
 import threading
+import time
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
 
-from . import audio_ops, effects
-from .config import ALLOWED_ORIGINS, MAX_UPLOAD_BYTES, STORAGE_DIR
+from . import audio_ops, effects, moderation, reviews
+from .config import (
+    ALLOWED_ORIGINS,
+    MAX_UPLOAD_BYTES,
+    REVIEW_RATE_LIMIT,
+    REVIEW_RATE_WINDOW_SECONDS,
+    STORAGE_DIR,
+)
+
+
+class ReviewSubmission(BaseModel):
+    name: str = Field(default="", max_length=200)
+    rating: int = Field(ge=1, le=5)
+    # Generous here on purpose — moderation.clean_review owns the real limit and
+    # returns a message explaining it, which is friendlier than a 422 from here.
+    text: str = Field(max_length=5000)
 from .jobs import Job, create_job, get_job, heavy_slot
 
 # Job state lives in this process's memory, so anything that restarts the
@@ -322,6 +338,58 @@ async def download_output(job_id: str, stem: str, format: str = "wav"):
         raise HTTPException(status_code=404, detail=f"Format '{format}' not available")
     media_type = "audio/mpeg" if format == "mp3" else "audio/wav"
     return FileResponse(path, filename=_download_filename(job, stem, format), media_type=media_type)
+
+
+_recent_posts: dict[str, list[float]] = {}
+_rate_lock = threading.Lock()
+
+
+def _at_rate_limit(client_ip: str) -> bool:
+    now = time.time()
+    with _rate_lock:
+        history = [t for t in _recent_posts.get(client_ip, []) if now - t < REVIEW_RATE_WINDOW_SECONDS]
+        _recent_posts[client_ip] = history
+        return len(history) >= REVIEW_RATE_LIMIT
+
+
+def _record_post(client_ip: str) -> None:
+    """Counted only once a review is actually accepted.
+
+    Checking and recording are separate so a rejected submission doesn't consume
+    the poster's allowance: someone who trips the profanity filter, pastes a
+    link or mistypes would otherwise spend their quota on attempts that were
+    never published, and get locked out while writing a perfectly good review.
+    """
+    with _rate_lock:
+        _recent_posts.setdefault(client_ip, []).append(time.time())
+
+
+@app.get("/api/reviews")
+async def get_reviews():
+    return {"reviews": reviews.list_reviews(), **reviews.summary()}
+
+
+@app.post("/api/reviews")
+async def post_review(request: Request, payload: ReviewSubmission):
+    # Cloud Run terminates TLS upstream, so the caller's address is the first
+    # entry in X-Forwarded-For rather than the socket's peer.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+    if _at_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="You've posted a few reviews already — give it a while before adding another.",
+        )
+
+    try:
+        name, text = moderation.clean_review(payload.name, payload.text)
+    except moderation.ReviewRejected as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    stored = reviews.add_review(name, payload.rating, text)
+    _record_post(client_ip)
+    return stored
 
 
 @app.get("/api/health")

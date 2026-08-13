@@ -5,6 +5,7 @@ import { Faq } from "./components/Faq";
 import { LiveWaveform } from "./components/LiveWaveform";
 import { Reveal } from "./components/Reveal";
 import { RetunePanel } from "./components/RetunePanel";
+import { Reviews } from "./components/Reviews";
 import { SeparatePanel } from "./components/SeparatePanel";
 import { loadFile, saveFile } from "./lib/fileStore";
 import { useHashRoute, type Tool } from "./lib/useHashRoute";
@@ -253,6 +254,21 @@ export default function App() {
               </Reveal>
             ))}
           </div>
+        </section>
+
+        {/* ---------- Reviews ---------- */}
+        <section id="reviews" className="mx-auto max-w-3xl scroll-mt-6 px-4 py-12">
+          <Reveal>
+            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-zinc-50">
+              What people are saying
+            </h2>
+            <p className="mb-6 text-center text-sm text-zinc-500">
+              Used it for something? Leave a review — anyone can.
+            </p>
+          </Reveal>
+          <Reveal delay={0.08}>
+            <Reviews />
+          </Reveal>
         </section>
 
         {/* ---------- FAQ ---------- */}

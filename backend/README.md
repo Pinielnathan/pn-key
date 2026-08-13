@@ -38,7 +38,7 @@ More cores is close to cost-neutral rather than a splurge: Cloud Run bills CPU-s
 **The rest is Demucs on a CPU, which is near its floor here.** `--segment` is already at 7, the largest window htdemucs accepts, and the overlap is already cut. Going meaningfully faster means changing the hardware or the model, and both are trade-offs rather than free wins:
 
 - **A GPU** (`--gpu 1 --gpu-type nvidia-l4`) would put separation in the 10–20s range, but needs a CUDA build of Torch, is limited to certain regions, and bills at a much higher rate while active.
-- **A lighter model** (`mdx_extra_q` via `DEMUCS_MODEL`) is faster than htdemucs but needs the `diffq` dependency and separates less cleanly — reasonable as an opt-in "fast mode", not as the default.
+- **A lighter model.** Measured, and there isn't one: on the same 3m20s track, `hdemucs_mmi` ran 88.9s against htdemucs' 93.3s (5%, not worth a change in separation quality), and `mdx_extra_q` — the one that sounds like it should win, being quantized — ran **266.2s, nearly three times slower**. htdemucs is already the fastest of the bundled models here, so swapping it is a dead end rather than an untried idea.
 
 `--source .` builds `Dockerfile` directly on Cloud Run's build infra and deploys it — no local Docker install needed. `--allow-unauthenticated` is required since the frontend calls this over plain HTTPS with no auth. `--timeout 300` covers longer separation jobs. Cloud Run prints a stable `https://pn-key-backend-<hash>-<region>.a.run.app` URL that doesn't change between deploys — set that as `VITE_API_URL` on the frontend once.
 
@@ -59,6 +59,26 @@ gcloud projects add-iam-policy-binding <PROJECT_ID> \
   --role="roles/storage.objectViewer"
 ```
 then retry the deploy.
+
+## Reviews
+
+`GET/POST /api/reviews` back the review section on the site. Anyone can post; there's no account.
+
+Reviews have to outlive the container, which rules out `STORAGE_DIR` — on Cloud Run that's a tmpfs that dies with the instance. So they live in a Cloud Storage bucket, named by `REVIEWS_BUCKET`. One-time setup (already done for the live service):
+
+```
+gcloud storage buckets create gs://pn-key-reviews-<PROJECT_NUMBER> \
+  --location=us-central1 --uniform-bucket-level-access
+gcloud storage buckets add-iam-policy-binding gs://pn-key-reviews-<PROJECT_NUMBER> \
+  --member="serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+```
+
+With no `REVIEWS_BUCKET` set the store falls back to a JSON file on real disk (`REVIEWS_LOCAL_PATH`), which is what local runs and `run_local.ps1` use — so nothing extra is needed to develop against it.
+
+The whole list is rewritten per post rather than appended to, which is only safe because the service runs a single instance. That's the same constraint `--max-instances 1` already imposes for job state; if it ever scales out, this needs a real datastore.
+
+`moderation.py` screens submissions for profanity, sexual content and slurs. It is a blocklist, so treat it as a speed bump rather than a guarantee — reviews are stored as plain records and can be removed by hand. It deliberately errs toward letting text through: matching is on whole words after normalisation, so "class", "assessment" and "Scunthorpe" pass while `f.u.c.k`, `sh1t` and `fuuuuuck` don't. Rejections don't count against the per-IP rate limit, so tripping the filter can't lock someone out of posting a genuine review.
 
 ## Running it locally / self-hosted fallback
 

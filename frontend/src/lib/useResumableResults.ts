@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { getJobStatus, pollJobUntilDone } from "./api";
-import { useLocalStorageState } from "./useLocalStorageState";
+import { stamp, unstamp } from "./workingState";
 
 export type ItemStatus = "queued" | "processing" | "done" | "error";
 
@@ -18,8 +18,30 @@ const EXPIRED_MESSAGE = "This result has expired (job files are only kept for a 
  * re-checks every persisted job against the backend — resuming polling for anything still
  * in flight and flagging jobs the server no longer has (past its TTL, or a restart) as expired.
  */
+/** Like useLocalStorageState, but forgets results older than the working-state TTL. */
+function useExpiringResults(key: string): [ResultItem[], Dispatch<SetStateAction<ResultItem[]>>] {
+  const [state, setState] = useState<ResultItem[]>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw !== null ? (unstamp<ResultItem[]>(JSON.parse(raw)) ?? []) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(stamp(state)));
+    } catch {
+      // storage full or unavailable — still works for this session
+    }
+  }, [key, state]);
+
+  return [state, setState];
+}
+
 export function useResumableResults(key: string) {
-  const [results, setResults] = useLocalStorageState<ResultItem[]>(key, []);
+  const [results, setResults] = useExpiringResults(key);
 
   useEffect(() => {
     results.forEach((result, index) => {
