@@ -5,12 +5,12 @@ const ITEMS: { question: string; answer: string }[] = [
   {
     question: "What file types and sizes can I upload?",
     answer:
-      "MP3, WAV, M4A, FLAC, OGG, AAC, AIFF and WMA, plus recordings made right here with the mic button. Files need to be under 31 MB — a full song exported as WAV usually isn't, so export as MP3 and you'll be well inside the limit with no audible difference after processing.",
+      "MP3, WAV, M4A, FLAC, OGG, AAC, AIFF and WMA, plus recordings made right here with the mic button. Files need to be under 31 MB. A full song exported as WAV usually isn't, so export as MP3 and you'll be well inside the limit with no audible difference after processing.",
   },
   {
     question: "How long does separation take?",
     answer:
-      "Usually a minute or two for a full song. The separation model runs on the server's CPU, and the server sleeps when nobody's using it — so the very first request after a quiet spell also pays for a cold start. Later runs are quicker.",
+      "Usually a minute or two for a full song. The separation model runs on the server's CPU, and the server sleeps when nobody's using it, so the very first request after a quiet spell also pays for a cold start. Later runs are quicker.",
   },
   {
     question: "Why is the detected BPM or key wrong sometimes?",
@@ -25,7 +25,7 @@ const ITEMS: { question: string; answer: string }[] = [
   {
     question: "What does 'BPM and key as metadata' actually mean?",
     answer:
-      "Every WAV and MP3 you download is tagged with standard ID3 fields — TBPM for tempo, TKEY for key. That's the same metadata Rekordbox, Serato and Traktor read, so your stems land in your library already sorted rather than needing a re-analysis pass.",
+      "Every WAV and MP3 you download is tagged with standard ID3 fields: TBPM for tempo, TKEY for key. That's the same metadata Rekordbox, Serato and Traktor read, so your stems land in your library already sorted rather than needing a re-analysis pass.",
   },
 ];
 

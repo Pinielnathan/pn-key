@@ -1,10 +1,10 @@
-"""First-pass content filter for user-submitted reviews.
+"""First-pass content filter for user-submitted suggestions.
 
 This is a blocklist, and a blocklist is a speed bump rather than a guarantee —
 it will not catch a determined poster, and it isn't meant to. What it does catch
 is the ordinary case: someone dropping a slur or explicit language into a public
-review on a portfolio site. Anything that gets past it is still removable by
-hand, since reviews are stored as plain records.
+suggestion on a portfolio site. Anything that gets past it is still removable by
+hand, since entries are stored as plain records.
 
 The two failure modes pull in opposite directions, and the design leans
 deliberately toward the first:
@@ -92,12 +92,12 @@ def find_violation(text: str) -> str | None:
     return None
 
 
-class ReviewRejected(ValueError):
+class SubmissionRejected(ValueError):
     """Raised with a message intended to be shown to the person posting."""
 
 
-def clean_review(name: str, text: str) -> tuple[str, str]:
-    """Validates and normalises a submission, or raises ReviewRejected.
+def clean_submission(name: str, text: str) -> tuple[str, str]:
+    """Validates and normalises a submission, or raises SubmissionRejected.
 
     Returns the trimmed (name, text) to store.
     """
@@ -105,21 +105,21 @@ def clean_review(name: str, text: str) -> tuple[str, str]:
     text = text.strip()
 
     if not text:
-        raise ReviewRejected("Please write something before posting.")
+        raise SubmissionRejected("Please write something before posting.")
     if len(text) > MAX_TEXT_LENGTH:
-        raise ReviewRejected(f"Reviews are limited to {MAX_TEXT_LENGTH} characters.")
+        raise SubmissionRejected(f"Suggestions are limited to {MAX_TEXT_LENGTH} characters.")
     if len(name) > MAX_NAME_LENGTH:
-        raise ReviewRejected(f"Names are limited to {MAX_NAME_LENGTH} characters.")
+        raise SubmissionRejected(f"Names are limited to {MAX_NAME_LENGTH} characters.")
     if _URL.search(text) or _URL.search(name):
-        raise ReviewRejected("Reviews can't contain links.")
+        raise SubmissionRejected("Suggestions can't contain links.")
 
     for field in (name, text):
         category = find_violation(field)
         if category == "slur":
-            raise ReviewRejected("That language isn't allowed here.")
+            raise SubmissionRejected("That language isn't allowed here.")
         if category == "sexual":
-            raise ReviewRejected("Please keep reviews free of sexual content.")
+            raise SubmissionRejected("Please keep suggestions free of sexual content.")
         if category == "profanity":
-            raise ReviewRejected("Please rewrite that without the profanity.")
+            raise SubmissionRejected("Please rewrite that without the profanity.")
 
     return (name or "Anonymous"), text

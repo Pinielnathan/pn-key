@@ -150,32 +150,46 @@ export async function previewRetune(params: {
   return blobOrThrow(res);
 }
 
-export interface Review {
+export type FeedbackKind = "feature" | "bug" | "other";
+
+export interface FeedbackItem {
   id: string;
   name: string;
-  rating: number;
+  kind: FeedbackKind;
   text: string;
+  votes: number;
+  status: string;
   created_at: number;
 }
 
-export interface ReviewsResponse {
-  reviews: Review[];
+export interface FeedbackResponse {
+  items: FeedbackItem[];
   count: number;
-  average: number | null;
+  features: number;
+  bugs: number;
 }
 
-export async function fetchReviews(): Promise<ReviewsResponse> {
-  const res = await fetch(`${API_BASE}/api/reviews`);
-  return parseJsonOrThrow<ReviewsResponse>(res);
+export async function fetchFeedback(): Promise<FeedbackResponse> {
+  const res = await fetch(`${API_BASE}/api/feedback`);
+  return parseJsonOrThrow<FeedbackResponse>(res);
 }
 
-export async function submitReview(input: { name: string; rating: number; text: string }): Promise<Review> {
-  const res = await fetch(`${API_BASE}/api/reviews`, {
+export async function submitFeedback(input: {
+  name: string;
+  kind: FeedbackKind;
+  text: string;
+}): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  return parseJsonOrThrow<Review>(res);
+  return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+export async function voteFeedback(id: string): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/feedback/${id}/vote`, { method: "POST" });
+  return parseJsonOrThrow<FeedbackItem>(res);
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {

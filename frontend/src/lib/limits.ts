@@ -22,7 +22,7 @@ export function isTooLarge(file: File): boolean {
 export function rejectionReason(file: File): string | null {
   if (file.size === 0) return `"${file.name}" is empty.`;
   if (isTooLarge(file)) {
-    return `"${file.name}" is ${formatBytes(file.size)} — the server accepts up to ${formatBytes(
+    return `"${file.name}" is ${formatBytes(file.size)}. The server accepts up to ${formatBytes(
       MAX_UPLOAD_BYTES,
     )}. Convert it to MP3 (or trim it) and try again.`;
   }

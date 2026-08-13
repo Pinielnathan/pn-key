@@ -5,7 +5,7 @@ import { Faq } from "./components/Faq";
 import { LiveWaveform } from "./components/LiveWaveform";
 import { Reveal } from "./components/Reveal";
 import { RetunePanel } from "./components/RetunePanel";
-import { Reviews } from "./components/Reviews";
+import { Suggestions } from "./components/Suggestions";
 import { SeparatePanel } from "./components/SeparatePanel";
 import { loadFile, saveFile } from "./lib/fileStore";
 import { useHashRoute, type Tool } from "./lib/useHashRoute";
@@ -162,9 +162,6 @@ export default function App() {
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-lime px-6 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark"
           >
             Start processing
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
           </motion.button>
         </section>
 
@@ -256,18 +253,18 @@ export default function App() {
           </div>
         </section>
 
-        {/* ---------- Reviews ---------- */}
-        <section id="reviews" className="mx-auto max-w-3xl scroll-mt-6 px-4 py-12">
+        {/* ---------- Suggestions ---------- */}
+        <section id="suggestions" className="mx-auto max-w-3xl scroll-mt-6 px-4 py-12">
           <Reveal>
             <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-zinc-50">
-              What people are saying
+              Ask for a feature, report a bug
             </h2>
             <p className="mb-6 text-center text-sm text-zinc-500">
-              Used it for something? Leave a review — anyone can.
+              Anyone can post, and anyone can back what's already there. The most wanted rise to the top.
             </p>
           </Reveal>
           <Reveal delay={0.08}>
-            <Reviews />
+            <Suggestions />
           </Reveal>
         </section>
 

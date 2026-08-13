@@ -31,16 +31,16 @@ DEMUCS_SEGMENT = int(os.environ.get("DEMUCS_SEGMENT", "7"))
 # Fraction of each window recomputed to cross-fade the seams. See the call site.
 DEMUCS_OVERLAP = float(os.environ.get("DEMUCS_OVERLAP", "0.1"))
 
-# Reviews outlive the container, so they can't live in STORAGE_DIR — on Cloud
-# Run that's a tmpfs. With a bucket set they go to Cloud Storage; without one
-# they go to a JSON file on real disk, which is what local runs and the
-# self-hosted script use.
-REVIEWS_BUCKET = os.environ.get("REVIEWS_BUCKET", "").strip()
-REVIEWS_LOCAL_PATH = os.environ.get("REVIEWS_LOCAL_PATH", str(Path.home() / ".pn-key" / "reviews.json"))
+# Suggestion-board entries outlive the container, so they can't live in
+# STORAGE_DIR: on Cloud Run that's a tmpfs. With a bucket set they go to Cloud
+# Storage; without one they go to a JSON file on real disk, which is what local
+# runs and the self-hosted script use.
+FEEDBACK_BUCKET = os.environ.get("FEEDBACK_BUCKET", "").strip()
+FEEDBACK_LOCAL_PATH = os.environ.get("FEEDBACK_LOCAL_PATH", str(Path.home() / ".pn-key" / "feedback.json"))
 
-# Per-IP posting limit, to keep a bored visitor from filling the page.
-REVIEW_RATE_LIMIT = int(os.environ.get("REVIEW_RATE_LIMIT", "5"))
-REVIEW_RATE_WINDOW_SECONDS = int(os.environ.get("REVIEW_RATE_WINDOW_SECONDS", str(60 * 60)))
+# Per-IP posting limit, to keep a bored visitor from filling the board.
+FEEDBACK_RATE_LIMIT = int(os.environ.get("FEEDBACK_RATE_LIMIT", "5"))
+FEEDBACK_RATE_WINDOW_SECONDS = int(os.environ.get("FEEDBACK_RATE_WINDOW_SECONDS", str(60 * 60)))
 
 # How many uploads may be processed at once. Each in-flight separation holds a
 # model and its activations in memory, so N at once costs roughly N times the

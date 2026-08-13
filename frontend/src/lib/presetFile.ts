@@ -39,7 +39,7 @@ export function readPresetFile<T>(file: File, kind: string): Promise<T> {
       const envelope = parsed as PresetEnvelope<T>;
       if (envelope.kind !== kind) {
         const gotLabel = KIND_LABELS[envelope.kind] ?? envelope.kind;
-        reject(new Error(`That's a ${gotLabel} preset — load it from the ${gotLabel} tab instead.`));
+        reject(new Error(`That's a ${gotLabel} preset. Load it from the ${gotLabel} tab instead.`));
         return;
       }
       resolve(envelope.data);

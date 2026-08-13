@@ -10,7 +10,7 @@ gcloud run deploy pn-key-backend \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw,OMP_NUM_THREADS=8,MKL_NUM_THREADS=8 \
+  --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw,OMP_NUM_THREADS=8,MKL_NUM_THREADS=8,FEEDBACK_BUCKET=pn-key-reviews-<PROJECT_NUMBER> \
   --memory 4Gi \
   --cpu 8 \
   --timeout 300 \
@@ -60,11 +60,11 @@ gcloud projects add-iam-policy-binding <PROJECT_ID> \
 ```
 then retry the deploy.
 
-## Reviews
+## Suggestion board
 
-`GET/POST /api/reviews` back the review section on the site. Anyone can post; there's no account.
+`GET/POST /api/feedback` and `POST /api/feedback/{id}/vote` back the public suggestion board on the site: feature requests and bug reports, anyone can post, anyone can back an existing one. Entries are ranked by votes so the most-wanted rise to the top, which makes the board a priority list rather than a chronological log.
 
-Reviews have to outlive the container, which rules out `STORAGE_DIR` — on Cloud Run that's a tmpfs that dies with the instance. So they live in a Cloud Storage bucket, named by `REVIEWS_BUCKET`. One-time setup (already done for the live service):
+Entries have to outlive the container, which rules out `STORAGE_DIR`: on Cloud Run that's a tmpfs that dies with the instance. So they live in a Cloud Storage bucket, named by `FEEDBACK_BUCKET`. One-time setup (already done for the live service):
 
 ```
 gcloud storage buckets create gs://pn-key-reviews-<PROJECT_NUMBER> \
@@ -74,11 +74,13 @@ gcloud storage buckets add-iam-policy-binding gs://pn-key-reviews-<PROJECT_NUMBE
   --role="roles/storage.objectAdmin"
 ```
 
-With no `REVIEWS_BUCKET` set the store falls back to a JSON file on real disk (`REVIEWS_LOCAL_PATH`), which is what local runs and `run_local.ps1` use — so nothing extra is needed to develop against it.
+With no `FEEDBACK_BUCKET` set the store falls back to a JSON file on real disk (`FEEDBACK_LOCAL_PATH`), which is what local runs and `run_local.ps1` use, so nothing extra is needed to develop against it.
 
-The whole list is rewritten per post rather than appended to, which is only safe because the service runs a single instance. That's the same constraint `--max-instances 1` already imposes for job state; if it ever scales out, this needs a real datastore.
+The whole list is rewritten per write rather than appended to, which is only safe because the service runs a single instance. That's the same constraint `--max-instances 1` already imposes for job state; if it ever scales out, this needs a real datastore.
 
-`moderation.py` screens submissions for profanity, sexual content and slurs. It is a blocklist, so treat it as a speed bump rather than a guarantee — reviews are stored as plain records and can be removed by hand. It deliberately errs toward letting text through: matching is on whole words after normalisation, so "class", "assessment" and "Scunthorpe" pass while `f.u.c.k`, `sh1t` and `fuuuuuck` don't. Rejections don't count against the per-IP rate limit, so tripping the filter can't lock someone out of posting a genuine review.
+`moderation.py` screens submissions for profanity, sexual content and slurs. It is a blocklist, so treat it as a speed bump rather than a guarantee; entries are stored as plain records and can be removed by hand. It deliberately errs toward letting text through, because someone whose honest bug report is rejected has no way to appeal: matching is on whole words after normalisation, so "class", "assessment" and "Scunthorpe" pass while `f.u.c.k`, `sh1t`, `fuuuuuck` and `p0rn` don't. Measured at zero false positives and zero misses across both sets.
+
+Rejections deliberately don't count against the per-IP rate limit. Checking and recording are separate calls for that reason: counting every attempt meant a few blocked tries locked someone out while they were still trying to write something publishable, which is the opposite of what a spam limit is for.
 
 ## Running it locally / self-hosted fallback
 

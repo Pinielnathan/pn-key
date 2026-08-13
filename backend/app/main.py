@@ -10,23 +10,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from . import audio_ops, effects, moderation, reviews
+from . import audio_ops, effects, feedback, moderation
 from .config import (
     ALLOWED_ORIGINS,
+    FEEDBACK_RATE_LIMIT,
+    FEEDBACK_RATE_WINDOW_SECONDS,
     MAX_UPLOAD_BYTES,
-    REVIEW_RATE_LIMIT,
-    REVIEW_RATE_WINDOW_SECONDS,
     STORAGE_DIR,
 )
 
 
-class ReviewSubmission(BaseModel):
-    name: str = Field(default="", max_length=200)
-    rating: int = Field(ge=1, le=5)
-    # Generous here on purpose — moderation.clean_review owns the real limit and
-    # returns a message explaining it, which is friendlier than a 422 from here.
-    text: str = Field(max_length=5000)
 from .jobs import Job, create_job, get_job, heavy_slot
+
+
+class FeedbackSubmission(BaseModel):
+    name: str = Field(default="", max_length=200)
+    kind: str = Field(default="other")
+    # Generous here on purpose: moderation.clean_submission owns the real limit
+    # and returns a message explaining it, which is friendlier than a 422.
+    text: str = Field(max_length=5000)
 
 # Job state lives in this process's memory, so anything that restarts the
 # process drops it. A poll for a job we don't have is therefore much more often
@@ -34,7 +36,7 @@ from .jobs import Job, create_job, get_job, heavy_slot
 # "Job not found" this used to return sent people looking for a bug in their own
 # request instead of telling them to just run it again.
 _JOB_GONE_DETAIL = (
-    "This job is no longer on the server — it either finished long enough ago to be "
+    "This job is no longer on the server. It either finished long enough ago to be "
     "cleaned up, or the server restarted while it was running. Please run it again."
 )
 
@@ -347,9 +349,9 @@ _rate_lock = threading.Lock()
 def _at_rate_limit(client_ip: str) -> bool:
     now = time.time()
     with _rate_lock:
-        history = [t for t in _recent_posts.get(client_ip, []) if now - t < REVIEW_RATE_WINDOW_SECONDS]
+        history = [t for t in _recent_posts.get(client_ip, []) if now - t < FEEDBACK_RATE_WINDOW_SECONDS]
         _recent_posts[client_ip] = history
-        return len(history) >= REVIEW_RATE_LIMIT
+        return len(history) >= FEEDBACK_RATE_LIMIT
 
 
 def _record_post(client_ip: str) -> None:
@@ -364,32 +366,43 @@ def _record_post(client_ip: str) -> None:
         _recent_posts.setdefault(client_ip, []).append(time.time())
 
 
-@app.get("/api/reviews")
-async def get_reviews():
-    return {"reviews": reviews.list_reviews(), **reviews.summary()}
-
-
-@app.post("/api/reviews")
-async def post_review(request: Request, payload: ReviewSubmission):
+def _client_ip(request: Request) -> str:
     # Cloud Run terminates TLS upstream, so the caller's address is the first
     # entry in X-Forwarded-For rather than the socket's peer.
     forwarded = request.headers.get("x-forwarded-for", "")
-    client_ip = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
 
+
+@app.get("/api/feedback")
+async def get_feedback():
+    return {"items": feedback.list_items(), **feedback.summary()}
+
+
+@app.post("/api/feedback")
+async def post_feedback(request: Request, payload: FeedbackSubmission):
+    client_ip = _client_ip(request)
     if _at_rate_limit(client_ip):
         raise HTTPException(
             status_code=429,
-            detail="You've posted a few reviews already — give it a while before adding another.",
+            detail="You've posted a few already. Give it a while before adding another.",
         )
 
     try:
-        name, text = moderation.clean_review(payload.name, payload.text)
-    except moderation.ReviewRejected as exc:
+        name, text = moderation.clean_submission(payload.name, payload.text)
+    except moderation.SubmissionRejected as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    stored = reviews.add_review(name, payload.rating, text)
+    stored = feedback.add_item(name, payload.kind, text)
     _record_post(client_ip)
     return stored
+
+
+@app.post("/api/feedback/{item_id}/vote")
+async def vote_feedback(item_id: str):
+    item = feedback.vote(item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="That suggestion is no longer on the board.")
+    return item
 
 
 @app.get("/api/health")
