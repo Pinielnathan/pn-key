@@ -8,6 +8,7 @@ import { DownloadButtons } from "./DownloadButtons";
 import { MultiFileDrop } from "./MultiFileDrop";
 import { ResultStatus } from "./ResultStatus";
 import { Spinner } from "./Spinner";
+import { StemPlayer } from "./StemPlayer";
 
 interface SeparatePanelProps {
   lastRecording: File | null;
@@ -148,16 +149,32 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
                 <ResultStatus status={result.status} error={result.error} processingLabel="Separating…" />
 
                 {result.status === "done" && result.jobId && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-zinc-300">Vocals</p>
-                      <audio controls src={downloadUrl(result.jobId, "vocals")} className="w-full" />
-                      <DownloadButtons jobId={result.jobId} stem="vocals" />
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-zinc-300">Instrumental / beat</p>
-                      <audio controls src={downloadUrl(result.jobId, "instrumental")} className="w-full" />
-                      <DownloadButtons jobId={result.jobId} stem="instrumental" />
+                  <div className="space-y-3">
+                    <StemPlayer
+                      tracks={[
+                        {
+                          id: `${result.jobId}-vocals`,
+                          label: "Vocals",
+                          url: downloadUrl(result.jobId, "vocals", "mp3"),
+                          accent: "#d4e01c",
+                        },
+                        {
+                          id: `${result.jobId}-instrumental`,
+                          label: "Instrumental",
+                          url: downloadUrl(result.jobId, "instrumental", "mp3"),
+                          accent: "#c9a227",
+                        },
+                      ]}
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Vocals</p>
+                        <DownloadButtons jobId={result.jobId} stem="vocals" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Instrumental</p>
+                        <DownloadButtons jobId={result.jobId} stem="instrumental" />
+                      </div>
                     </div>
                   </div>
                 )}

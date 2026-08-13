@@ -1,12 +1,13 @@
 import shutil
 import time
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from threading import Lock
-from typing import Optional
+from threading import BoundedSemaphore, Lock
+from typing import Iterator, Optional
 
-from .config import JOB_TTL_SECONDS, STORAGE_DIR
+from .config import JOB_TTL_SECONDS, MAX_CONCURRENT_JOBS, STORAGE_DIR
 
 
 @dataclass
@@ -26,6 +27,22 @@ class Job:
 
 _jobs: dict[str, Job] = {}
 _lock = Lock()
+
+_heavy_slots = BoundedSemaphore(MAX_CONCURRENT_JOBS)
+
+
+@contextmanager
+def heavy_slot() -> Iterator[None]:
+    """Held for the duration of one upload's actual audio processing.
+
+    Bounds how much of that work runs at once — see MAX_CONCURRENT_JOBS. A job
+    waiting here stays "queued", which is what that status is for.
+    """
+    _heavy_slots.acquire()
+    try:
+        yield
+    finally:
+        _heavy_slots.release()
 
 
 def create_job(kind: str) -> Job:

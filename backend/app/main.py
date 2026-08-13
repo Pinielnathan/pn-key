@@ -9,7 +9,17 @@ from fastapi.responses import FileResponse, Response
 
 from . import audio_ops, effects
 from .config import ALLOWED_ORIGINS, MAX_UPLOAD_BYTES, STORAGE_DIR
-from .jobs import Job, create_job, get_job
+from .jobs import Job, create_job, get_job, heavy_slot
+
+# Job state lives in this process's memory, so anything that restarts the
+# process drops it. A poll for a job we don't have is therefore much more often
+# "the server restarted underneath it" than a genuinely bogus id, and the bare
+# "Job not found" this used to return sent people looking for a bug in their own
+# request instead of telling them to just run it again.
+_JOB_GONE_DETAIL = (
+    "This job is no longer on the server — it either finished long enough ago to be "
+    "cleaned up, or the server restarted while it was running. Please run it again."
+)
 
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -71,15 +81,28 @@ def _parse_presets(presets: str) -> list[str]:
 
 async def _save_upload(upload: UploadFile, dest: Path) -> None:
     size = 0
+    too_large = False
     with dest.open("wb") as f:
         while chunk := await upload.read(1024 * 1024):
             size += len(chunk)
             if size > MAX_UPLOAD_BYTES:
-                dest.unlink(missing_ok=True)
-                raise HTTPException(status_code=413, detail="File too large")
+                too_large = True
+                break
             f.write(chunk)
-    if size == 0:
+
+    # Deleting the partial file has to happen out here, after the with-block has
+    # closed the handle: Windows refuses to unlink a file that's still open, so
+    # doing this inside the loop turned an intended 413 into a 500.
+    if too_large or size == 0:
         dest.unlink(missing_ok=True)
+
+    if too_large:
+        limit_mb = MAX_UPLOAD_BYTES / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File is larger than the {limit_mb:.0f} MB limit. Convert it to MP3 or trim it, then try again.",
+        )
+    if size == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
 
@@ -91,11 +114,12 @@ def _run_retune(
     semitone_shift: float,
 ) -> None:
     try:
-        job.status = "processing"
-        output_path = job.dir / "output.wav"
-        paths, detected = audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
-        job.outputs["output"] = paths
-        job.metadata["output"] = detected
+        with heavy_slot():
+            job.status = "processing"
+            output_path = job.dir / "output.wav"
+            paths, detected = audio_ops.retune(input_path, output_path, source_bpm, target_bpm, semitone_shift)
+            job.outputs["output"] = paths
+            job.metadata["output"] = detected
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -104,10 +128,11 @@ def _run_retune(
 
 def _run_separate(job: Job, input_path: Path) -> None:
     try:
-        job.status = "processing"
-        outputs, metadata = audio_ops.separate(input_path, job.dir / "stems")
-        job.outputs.update(outputs)
-        job.metadata.update(metadata)
+        with heavy_slot():
+            job.status = "processing"
+            outputs, metadata = audio_ops.separate(input_path, job.dir / "stems")
+            job.outputs.update(outputs)
+            job.metadata.update(metadata)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -116,11 +141,12 @@ def _run_separate(job: Job, input_path: Path) -> None:
 
 def _run_effect(job: Job, input_path: Path, preset_slugs: list[str]) -> None:
     try:
-        job.status = "processing"
-        output_path = job.dir / "output.wav"
-        paths, detected = audio_ops.apply_effect(input_path, output_path, preset_slugs)
-        job.outputs["output"] = paths
-        job.metadata["output"] = detected
+        with heavy_slot():
+            job.status = "processing"
+            output_path = job.dir / "output.wav"
+            paths, detected = audio_ops.apply_effect(input_path, output_path, preset_slugs)
+            job.outputs["output"] = paths
+            job.metadata["output"] = detected
         job.status = "done"
     except Exception as exc:  # noqa: BLE001
         job.status = "error"
@@ -235,7 +261,7 @@ async def create_effect_job(
 async def job_status(job_id: str):
     job = get_job(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_GONE_DETAIL)
     return {
         "job_id": job.id,
         "kind": job.kind,
@@ -249,7 +275,7 @@ async def job_status(job_id: str):
 async def download_output(job_id: str, stem: str, format: str = "wav"):
     job = get_job(job_id)
     if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail=_JOB_GONE_DETAIL)
     formats = job.outputs.get(stem)
     if not formats:
         raise HTTPException(status_code=404, detail="Output not ready")

@@ -11,13 +11,23 @@ gcloud run deploy pn-key-backend \
   --region us-central1 \
   --allow-unauthenticated \
   --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw \
-  --memory 2Gi \
+  --memory 4Gi \
   --cpu 2 \
   --timeout 300 \
-  --no-cpu-throttling
+  --no-cpu-throttling \
+  --max-instances 1 \
+  --concurrency 20
 ```
 
-`--source .` builds `Dockerfile` directly on Cloud Run's build infra and deploys it — no local Docker install needed. `--allow-unauthenticated` is required since the frontend calls this over plain HTTPS with no auth. `--memory 2Gi --cpu 2` gives PyTorch/Demucs enough headroom; `--timeout 300` covers longer separation jobs. Cloud Run prints a stable `https://pn-key-backend-<hash>-<region>.a.run.app` URL that doesn't change between deploys — set that as `VITE_API_URL` on the frontend once.
+`--source .` builds `Dockerfile` directly on Cloud Run's build infra and deploys it — no local Docker install needed. `--allow-unauthenticated` is required since the frontend calls this over plain HTTPS with no auth. `--timeout 300` covers longer separation jobs. Cloud Run prints a stable `https://pn-key-backend-<hash>-<region>.a.run.app` URL that doesn't change between deploys — set that as `VITE_API_URL` on the frontend once.
+
+**`--memory 4Gi` and `--max-instances 1` are both load-bearing, for the same reason: job state lives in one process's memory.**
+
+At 2Gi, separating a full-length song pushed the container past its memory limit, the kernel killed it, and every job in that process died with it — the frontend's next poll got a 404 and the user saw "Job not found" on work that had been running fine seconds earlier. Cloud Run's log for it is `Memory limit of 2048 MiB exceeded`. The app side of that is bounded too (`DEMUCS_SEGMENT` caps the processing window, `MAX_CONCURRENT_JOBS` stops simultaneous uploads from multiplying peak memory), but the headroom matters.
+
+`--max-instances 1` closes the other half: with several instances, the POST that creates a job and the GET that polls it can land on different containers, and the polling one has never heard of that job — the same "Job not found", with nothing wrong anywhere. One instance means one job table. If this ever needs to scale past that, job state has to move out of process memory first (GCS or Redis); raising max-instances on its own will reintroduce the bug.
+
+Note also that Cloud Run rejects request bodies over **32 MiB** at its edge, before the app sees them, answering with an HTML error page rather than the app's JSON — hence `MAX_UPLOAD_BYTES` sitting just under that, and the matching client-side check in the frontend so oversized files fail with a readable message.
 
 **`--no-cpu-throttling` is not optional for this app.** Cloud Run defaults to freezing a container's CPU once it finishes sending an HTTP response. This backend's jobs are async by design — the POST returns a `job_id` immediately while a background thread does the real work, polled separately — so without this flag, jobs sit at `"processing"` forever, starved of CPU between poll requests. Ask me how I know: first deploy did exactly that, `separate` never finished until this flag was added via `gcloud run services update pn-key-backend --no-cpu-throttling`.
 

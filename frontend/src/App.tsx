@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { EffectsPanel } from "./components/EffectsPanel";
+import { Faq } from "./components/Faq";
+import { LiveWaveform } from "./components/LiveWaveform";
+import { Reveal } from "./components/Reveal";
 import { RetunePanel } from "./components/RetunePanel";
 import { SeparatePanel } from "./components/SeparatePanel";
 import { loadFile, saveFile } from "./lib/fileStore";
@@ -8,10 +11,33 @@ import { useLocalStorageState } from "./lib/useLocalStorageState";
 
 type Tab = "retune" | "separate" | "effects";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "retune", label: "Retune" },
-  { id: "separate", label: "Separate" },
-  { id: "effects", label: "Effects" },
+const TABS: { id: Tab; label: string; blurb: string; icon: JSX.Element }[] = [
+  {
+    id: "retune",
+    label: "Retune",
+    blurb: "Match a vocal to a new tempo and key",
+    icon: (
+      <path d="M9 18V5l12-2v13M9 13l12-2M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+    ),
+  },
+  {
+    id: "separate",
+    label: "Separate",
+    blurb: "Split a song into vocals and instrumental",
+    icon: <path d="M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4" />,
+  },
+  {
+    id: "effects",
+    label: "Effects",
+    blurb: "Run a vocal through studio effect chains",
+    icon: <path d="M4 6h16M4 12h16M4 18h16M8 4v4M15 10v4M11 16v4" />,
+  },
+];
+
+const STEPS = [
+  { title: "Drop a file", body: "Any common audio format, or record straight from your mic. Nothing to install." },
+  { title: "We read the audio", body: "Tempo and key are detected automatically, and stay editable if the estimate looks off." },
+  { title: "Download tagged stems", body: "WAV and MP3, each carrying its BPM and key as ID3 metadata your DJ software reads." },
 ];
 
 const LAST_RECORDING_KEY = "pnkey:lastRecording";
@@ -33,6 +59,8 @@ export default function App() {
     saveFile(LAST_RECORDING_KEY, file).catch(() => {});
   }
 
+  const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
+
   return (
     <div className="relative min-h-screen overflow-x-clip">
       {/* Ambient brand glow, drifting slowly behind everything */}
@@ -45,67 +73,182 @@ export default function App() {
       </div>
       <div className="grain-overlay" aria-hidden />
 
-      <div className="relative z-10 mx-auto min-h-screen max-w-2xl px-4 py-6 sm:py-10">
-        <motion.header
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="mb-6 flex items-center gap-3 sm:mb-8 sm:gap-4"
-        >
-          <div className="relative shrink-0">
-            <div className="absolute inset-0 rounded-full bg-brand-lime/20 blur-xl" aria-hidden />
-            <img src="/logo.png" alt="PN Key" className="relative h-11 w-auto sm:h-14" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-zinc-50 sm:text-2xl">PN Key</h1>
-            <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-              Retune vocals, split songs into stems, or apply voice effects. Every download keeps its BPM
-              and key as metadata.
-            </p>
-          </div>
-        </motion.header>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mb-6 flex gap-1 rounded-xl border border-white/5 bg-ink-900/80 p-1 backdrop-blur"
-        >
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={`relative flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-                tab === id ? "text-ink-950" : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {tab === id && (
-                <motion.span
-                  layoutId="active-tab"
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                  className="absolute inset-0 rounded-lg bg-brand-lime shadow-glow"
-                />
-              )}
-              <span className="relative">{label}</span>
-            </button>
-          ))}
-        </motion.div>
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 8 }}
+      <div className="relative z-10">
+        <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
+          <motion.a
+            href="#top"
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="flex items-center gap-2.5"
           >
-            {tab === "retune" && <RetunePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-            {tab === "separate" && <SeparatePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-            {tab === "effects" && <EffectsPanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-          </motion.div>
-        </AnimatePresence>
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-brand-lime/20 blur-lg" aria-hidden />
+              <img src="/logo.png" alt="" className="relative h-9 w-auto" />
+            </div>
+            <span className="text-base font-bold tracking-tight text-zinc-50">PN Key</span>
+          </motion.a>
+          <motion.a
+            href="#tool"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+            className="rounded-lg border border-white/10 px-3.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:border-brand-lime/50 hover:text-brand-lime"
+          >
+            Open the tool
+          </motion.a>
+        </header>
 
-        <footer className="mt-12 border-t border-white/5 pt-6 text-xs text-zinc-500">
+        {/* ---------- Hero ---------- */}
+        <section id="top" className="mx-auto max-w-5xl px-4 pb-4 pt-8 text-center sm:pt-14">
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto max-w-3xl text-balance text-3xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-5xl"
+          >
+            Split any song into stems.{" "}
+            <span className="bg-gradient-to-r from-brand-lime to-brand-gold bg-clip-text text-transparent">
+              Retune any vocal.
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto mt-4 max-w-xl text-pretty text-sm leading-relaxed text-zinc-400 sm:text-base"
+          >
+            Isolate vocals and instrumentals, shift a take to a new tempo and key, or run it through a
+            studio effect chain. Every download is tagged with its BPM and key.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            className="mt-8"
+          >
+            <LiveWaveform className="cursor-crosshair" />
+            <p className="mt-2 text-xs text-zinc-600">Move your cursor across the waveform</p>
+          </motion.div>
+
+          <motion.a
+            href="#tool"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.36 }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-lime px-6 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark"
+          >
+            Start processing — free
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </motion.a>
+        </section>
+
+        {/* ---------- The tool ---------- */}
+        <section id="tool" className="mx-auto max-w-2xl scroll-mt-6 px-4 py-12 sm:py-16">
+          <div className="mb-5 grid gap-2 sm:grid-cols-3">
+            {TABS.map(({ id, label, icon }) => (
+              <motion.button
+                key={id}
+                onClick={() => setTab(id)}
+                whileTap={{ scale: 0.97 }}
+                className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+                  tab === id
+                    ? "border-brand-lime/60 text-ink-950"
+                    : "border-white/8 bg-ink-900/60 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                }`}
+              >
+                {tab === id && (
+                  <motion.span
+                    layoutId="active-tab"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                    className="absolute inset-0 bg-brand-lime shadow-glow"
+                  />
+                )}
+                <svg
+                  className="relative h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {icon}
+                </svg>
+                <span className="relative">{label}</span>
+              </motion.button>
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={`blurb-${tab}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="mb-5 text-center text-xs text-zinc-500"
+            >
+              {activeTab.blurb}
+            </motion.p>
+          </AnimatePresence>
+
+          <div className="rounded-2xl border border-white/5 bg-ink-900/40 p-4 backdrop-blur sm:p-6">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {tab === "retune" && <RetunePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
+                {tab === "separate" && <SeparatePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
+                {tab === "effects" && <EffectsPanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </section>
+
+        {/* ---------- How it works ---------- */}
+        <section className="mx-auto max-w-5xl px-4 py-12">
+          <Reveal>
+            <h2 className="text-center text-2xl font-bold tracking-tight text-zinc-50">How it works</h2>
+          </Reveal>
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <Reveal key={step.title} delay={i * 0.1}>
+                <div className="group h-full rounded-2xl border border-white/5 bg-ink-900/50 p-5 transition-colors hover:border-brand-lime/30">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-lime/10 font-mono text-sm font-bold text-brand-lime transition-transform duration-300 group-hover:scale-110">
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-3 font-semibold text-zinc-100">{step.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{step.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------- FAQ ---------- */}
+        <section className="mx-auto max-w-3xl px-4 py-12">
+          <Reveal>
+            <h2 className="mb-6 text-center text-2xl font-bold tracking-tight text-zinc-50">
+              Questions, answered
+            </h2>
+          </Reveal>
+          <Reveal delay={0.08}>
+            <Faq />
+          </Reveal>
+        </section>
+
+        <footer className="mx-auto max-w-3xl border-t border-white/5 px-4 py-8 text-xs text-zinc-500">
           <p>Only upload audio you have the rights to process.</p>
           <p className="mt-3">
             Built by{" "}

@@ -13,7 +13,7 @@ from mutagen.mp3 import MP3
 from mutagen.wave import WAVE
 
 from . import effects
-from .config import DEMUCS_MODEL
+from .config import DEMUCS_MODEL, DEMUCS_SEGMENT
 
 # Krumhansl-Kessler key profiles — the standard reference pitch-class weights
 # used for correlation-based key estimation from a chroma vector.
@@ -188,12 +188,34 @@ def separate(input_path: Path, out_dir: Path) -> tuple[dict[str, dict[str, Path]
         "vocals",
         "-n",
         DEMUCS_MODEL,
+        # Demucs otherwise sizes its processing window to the whole track, and the
+        # per-window activations are what dominate peak RSS — a full-length song
+        # pushed this past the container's memory limit, the kernel killed the
+        # process, and every in-flight job died with it (all job state is in this
+        # process's memory). A fixed short window bounds that cost to roughly a
+        # constant regardless of track length. 7s is just under htdemucs' 7.8s
+        # training segment, which is the largest window that model accepts.
+        "--segment",
+        str(DEMUCS_SEGMENT),
+        # One worker: parallel workers each hold their own copy of the model and
+        # its activations, which is exactly the memory we're trying to bound.
+        "-j",
+        "1",
         "-o",
         str(out_dir),
         str(input_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
+        # A negative return code means the kernel killed Demucs with a signal
+        # rather than it exiting on its own, and for this workload that is
+        # almost always the OOM killer — in which case stderr is empty and the
+        # raw code alone tells the user nothing.
+        if result.returncode < 0:
+            raise RuntimeError(
+                "Separation ran out of memory on the server. Try a shorter track, "
+                "or convert it to MP3 before uploading."
+            )
         raise RuntimeError(f"Demucs failed: {result.stderr[-4000:]}")
 
     track_name = input_path.stem

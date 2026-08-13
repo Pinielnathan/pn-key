@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { formatBytes, MAX_UPLOAD_BYTES, rejectionReason } from "../lib/limits";
 import { MicRecorder } from "./MicRecorder";
 
 interface MultiFileDropProps {
@@ -24,6 +25,7 @@ export function MultiFileDrop({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [rejected, setRejected] = useState<string[]>([]);
 
   const singleFile = files.length === 1 ? files[0] : null;
 
@@ -38,7 +40,12 @@ export function MultiFileDrop({
   }, [singleFile]);
 
   function addFiles(newFiles: FileList | File[]) {
-    onFilesChange([...files, ...Array.from(newFiles)]);
+    const incoming = Array.from(newFiles);
+    const reasons = incoming.map(rejectionReason);
+    const accepted = incoming.filter((_, i) => reasons[i] === null);
+
+    setRejected(reasons.filter((reason): reason is string => reason !== null));
+    if (accepted.length > 0) onFilesChange([...files, ...accepted]);
   }
 
   function removeFile(index: number) {
@@ -53,10 +60,12 @@ export function MultiFileDrop({
 
   return (
     <div className="space-y-3">
-      <div
-        className={`group cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
+      <motion.div
+        animate={isDragging ? { scale: 1.015 } : { scale: 1 }}
+        transition={{ type: "spring", stiffness: 420, damping: 28 }}
+        className={`group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed p-8 text-center transition-colors duration-200 ${
           isDragging
-            ? "scale-[1.01] border-brand-lime bg-brand-lime/10 shadow-glow"
+            ? "border-brand-lime bg-brand-lime/10 shadow-glow"
             : "border-zinc-700 hover:border-zinc-500 hover:bg-white/[0.02]"
         }`}
         onClick={() => inputRef.current?.click()}
@@ -67,6 +76,10 @@ export function MultiFileDrop({
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
       >
+        {/* Light sweeps across the zone on hover — the whole panel reads as one
+            button rather than a static box with a click handler. */}
+        <div className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/[0.04] to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+
         <input
           ref={inputRef}
           type="file"
@@ -78,25 +91,56 @@ export function MultiFileDrop({
             event.target.value = "";
           }}
         />
-        <svg
-          className={`mx-auto mb-3 h-8 w-8 transition-colors ${
-            isDragging ? "text-brand-lime" : "text-zinc-600 group-hover:text-zinc-400"
-          }`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
-          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-        </svg>
+
+        {/* An equaliser that idles flat and jumps to life while a file is over
+            the zone, so the drop target visibly anticipates the drop. */}
+        <div className="mb-3 flex h-8 items-end justify-center gap-1" aria-hidden>
+          {[0.45, 0.8, 0.35, 1, 0.6, 0.9, 0.4].map((peak, i) => (
+            <motion.span
+              key={i}
+              className={`w-1.5 rounded-full transition-colors ${
+                isDragging ? "bg-brand-lime" : "bg-zinc-600 group-hover:bg-zinc-400"
+              }`}
+              animate={
+                isDragging
+                  ? { height: [`${peak * 40}%`, "100%", `${peak * 55}%`] }
+                  : { height: `${peak * 45}%` }
+              }
+              transition={
+                isDragging
+                  ? { duration: 0.55, repeat: Infinity, repeatType: "mirror", delay: i * 0.06, ease: "easeInOut" }
+                  : { duration: 0.3 }
+              }
+              style={{ height: `${peak * 45}%` }}
+            />
+          ))}
+        </div>
+
         <p className="text-sm text-zinc-400">
-          <span className="font-medium text-zinc-300">{label}.</span> Drag and drop one or more audio
-          files here, or click to browse.
+          <span className="font-medium text-zinc-300">{label}.</span>{" "}
+          {isDragging ? "Drop it." : "Drag and drop one or more audio files here, or click to browse."}
         </p>
-      </div>
+        <p className="mt-1 text-xs text-zinc-600">MP3, WAV, M4A, FLAC and more · up to {formatBytes(MAX_UPLOAD_BYTES)} per file</p>
+      </motion.div>
+
+      <AnimatePresence>
+        {rejected.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+              {rejected.map((reason) => (
+                <p key={reason} className="text-sm text-amber-300">
+                  {reason}
+                </p>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         {previewUrl && <audio controls src={previewUrl} className="h-9 min-w-[200px] flex-1" />}

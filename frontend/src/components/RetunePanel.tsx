@@ -18,6 +18,7 @@ import { MultiFileDrop } from "./MultiFileDrop";
 import { PresetControls } from "./PresetControls";
 import { ResultStatus } from "./ResultStatus";
 import { Spinner } from "./Spinner";
+import { StemPlayer } from "./StemPlayer";
 
 interface RetunePresetData {
   targetBpm?: number;
@@ -492,8 +493,17 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
                 <ResultStatus status={result.status} error={result.error} />
 
                 {result.status === "done" && result.jobId && (
-                  <div className="space-y-2">
-                    <audio controls src={downloadUrl(result.jobId, "output")} className="w-full" />
+                  <div className="space-y-3">
+                    <StemPlayer
+                      tracks={[
+                        {
+                          id: `${result.jobId}-output`,
+                          label: "Retuned",
+                          url: downloadUrl(result.jobId, "output", "mp3"),
+                          accent: "#d4e01c",
+                        },
+                      ]}
+                    />
                     <DownloadButtons jobId={result.jobId} stem="output" />
                   </div>
                 )}
