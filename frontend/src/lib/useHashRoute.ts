@@ -3,11 +3,24 @@ import { useCallback, useEffect, useState } from "react";
 export const TOOLS = ["retune", "separate", "effects"] as const;
 export type Tool = (typeof TOOLS)[number];
 
+export const PAGES = ["home", "board", "help", "admin"] as const;
+export type Page = (typeof PAGES)[number];
+
+export interface Route {
+  page: Page;
+  /** Which tool the home page has selected. Meaningless on other pages. */
+  tool: Tool;
+}
+
 const STORED_TOOL_KEY = "pnkey:tab";
 
-function toolFromHash(): Tool | null {
+function parseHash(): Partial<Route> {
   const raw = window.location.hash.replace(/^#\/?/, "").toLowerCase();
-  return (TOOLS as readonly string[]).includes(raw) ? (raw as Tool) : null;
+  if ((TOOLS as readonly string[]).includes(raw)) return { page: "home", tool: raw as Tool };
+  if (raw === "board" || raw === "suggestions") return { page: "board" };
+  if (raw === "help" || raw === "faq") return { page: "help" };
+  if (raw === "admin") return { page: "admin" };
+  return {};
 }
 
 function storedTool(): Tool {
@@ -16,36 +29,42 @@ function storedTool(): Tool {
     const parsed = raw !== null ? (JSON.parse(raw) as string) : null;
     if (parsed && (TOOLS as readonly string[]).includes(parsed)) return parsed as Tool;
   } catch {
-    // unreadable storage — fall through to the default
+    // unreadable storage, fall through to the default
   }
   return "retune";
 }
 
 /**
- * Gives each tool its own URL (`#/separate`), so a tool can be linked to and
- * bookmarked, and the back button moves between them.
+ * Hash routing for the whole site, not just the tool tabs.
  *
- * Hash routing rather than a router dependency and real paths: the site is a
- * static SPA on a host that would otherwise need a rewrite rule to stop
- * `/separate` 404ing on a hard refresh. The hash never reaches the server, so
- * this works anywhere it's deployed.
+ * Hash rather than real paths and a router dependency: this deploys as a static
+ * SPA, where `/board` would 404 on a hard refresh unless the host is configured
+ * to rewrite it. The hash never reaches the server, so every page here is
+ * linkable and survives a refresh anywhere it's hosted.
+ *
+ * The tool doubles as the home page's own URL (`#/separate`), so linking to a
+ * specific tool still works and Back moves between tools as well as pages.
  */
-export function useHashRoute(): [Tool, (tool: Tool) => void] {
-  const [tool, setToolState] = useState<Tool>(() => toolFromHash() ?? storedTool());
+export function useHashRoute(): [Route, (next: Partial<Route>) => void] {
+  const [route, setRoute] = useState<Route>(() => {
+    const parsed = parseHash();
+    return { page: parsed.page ?? "home", tool: parsed.tool ?? storedTool() };
+  });
 
-  // Landing without a hash still leaves the address bar showing the tool that's
-  // actually on screen, so copying the URL shares what the user is looking at.
   useEffect(() => {
-    if (toolFromHash() === null) {
-      window.history.replaceState(null, "", `#/${tool}`);
+    if (Object.keys(parseHash()).length === 0) {
+      window.history.replaceState(null, "", `#/${route.tool}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const onHashChange = () => {
-      const next = toolFromHash();
-      if (next) setToolState(next);
+      const parsed = parseHash();
+      setRoute((prev) => ({
+        page: parsed.page ?? prev.page,
+        tool: parsed.tool ?? prev.tool,
+      }));
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -53,17 +72,21 @@ export function useHashRoute(): [Tool, (tool: Tool) => void] {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORED_TOOL_KEY, JSON.stringify(tool));
+      localStorage.setItem(STORED_TOOL_KEY, JSON.stringify(route.tool));
     } catch {
       // non-fatal: the URL is still the source of truth this session
     }
-  }, [tool]);
+  }, [route.tool]);
 
-  const setTool = useCallback((next: Tool) => {
-    setToolState(next);
-    // Pushing (not replacing) is what makes Back return to the previous tool.
-    if (toolFromHash() !== next) window.location.hash = `/${next}`;
+  const navigate = useCallback((next: Partial<Route>) => {
+    setRoute((prev) => {
+      const merged = { page: next.page ?? prev.page, tool: next.tool ?? prev.tool };
+      const hash = merged.page === "home" ? `/${merged.tool}` : `/${merged.page}`;
+      // Pushing rather than replacing is what makes Back return to where you were.
+      if (window.location.hash !== `#${hash}`) window.location.hash = hash;
+      return merged;
+    });
   }, []);
 
-  return [tool, setTool];
+  return [route, navigate];
 }

@@ -59,6 +59,22 @@ def get_job(job_id: str) -> Optional[Job]:
         return _jobs.get(job_id)
 
 
+def jobs_snapshot() -> dict:
+    """Counts by status, for the admin dashboard.
+
+    Deliberately counts rather than listing: job ids are the only thing standing
+    between a stranger and someone else's uploaded audio, since the download
+    route takes nothing but the id. Handing the full list to any page, even one
+    behind the admin key, gives that away for no benefit the counts don't cover.
+    """
+    with _lock:
+        statuses = [job.status for job in _jobs.values()]
+    return {
+        "total": len(statuses),
+        **{status: statuses.count(status) for status in ("queued", "processing", "done", "error")},
+    }
+
+
 def cleanup_expired() -> None:
     now = time.time()
     expired: list[Job] = []

@@ -42,6 +42,12 @@ FEEDBACK_LOCAL_PATH = os.environ.get("FEEDBACK_LOCAL_PATH", str(Path.home() / ".
 FEEDBACK_RATE_LIMIT = int(os.environ.get("FEEDBACK_RATE_LIMIT", "5"))
 FEEDBACK_RATE_WINDOW_SECONDS = int(os.environ.get("FEEDBACK_RATE_WINDOW_SECONDS", str(60 * 60)))
 
+# Shared secret for the admin page, which can delete anything on the board.
+# Unset means every admin endpoint refuses outright rather than defaulting to
+# something guessable: an admin API that ships with a fallback password is worse
+# than one that's switched off, because it looks protected and isn't.
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
+
 # How many uploads may be processed at once. Each in-flight separation holds a
 # model and its activations in memory, so N at once costs roughly N times the
 # peak — which is how a handful of simultaneous uploads can exceed the memory

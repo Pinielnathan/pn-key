@@ -152,6 +152,13 @@ export async function previewRetune(params: {
 
 export type FeedbackKind = "feature" | "bug" | "other";
 
+export interface FeedbackReply {
+  id: string;
+  name: string;
+  text: string;
+  created_at: number;
+}
+
 export interface FeedbackItem {
   id: string;
   name: string;
@@ -159,6 +166,7 @@ export interface FeedbackItem {
   text: string;
   votes: number;
   status: string;
+  replies?: FeedbackReply[];
   created_at: number;
 }
 
@@ -189,6 +197,72 @@ export async function submitFeedback(input: {
 
 export async function voteFeedback(id: string): Promise<FeedbackItem> {
   const res = await fetch(`${API_BASE}/api/feedback/${id}/vote`, { method: "POST" });
+  return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+export async function replyToFeedback(
+  id: string,
+  input: { name: string; text: string },
+): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/feedback/${id}/replies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+// ---- Admin ----
+// The key is passed per request rather than exchanged for a session: there's
+// one operator and no login flow to build, and this way nothing is left signed
+// in on a shared machine after the tab closes unless it was explicitly saved.
+
+export interface AdminOverview {
+  items: FeedbackItem[];
+  counts: Record<string, number>;
+  jobs_in_memory: Record<string, number>;
+  storage: string;
+}
+
+function adminHeaders(key: string): HeadersInit {
+  return { "X-Admin-Token": key, "Content-Type": "application/json" };
+}
+
+export async function checkAdminKey(key: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/admin/check`, { headers: adminHeaders(key) });
+  if (res.ok) return true;
+  if (res.status === 401) return false;
+  await parseJsonOrThrow(res); // surfaces "not configured" and other real errors
+  return false;
+}
+
+export async function fetchAdminOverview(key: string): Promise<AdminOverview> {
+  const res = await fetch(`${API_BASE}/api/admin/overview`, { headers: adminHeaders(key) });
+  return parseJsonOrThrow<AdminOverview>(res);
+}
+
+export async function adminDeleteItem(key: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/admin/feedback/${id}`, {
+    method: "DELETE",
+    headers: adminHeaders(key),
+  });
+  await parseJsonOrThrow(res);
+}
+
+export async function adminDeleteReply(key: string, id: string, replyId: string): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/admin/feedback/${id}/replies/${replyId}`, {
+    method: "DELETE",
+    headers: adminHeaders(key),
+  });
+  return parseJsonOrThrow<FeedbackItem>(res);
+}
+
+export async function adminSetStatus(key: string, id: string, status: string): Promise<FeedbackItem> {
+  const res = await fetch(`${API_BASE}/api/admin/feedback/${id}/status`, {
+    method: "PATCH",
+    headers: adminHeaders(key),
+    body: JSON.stringify({ status }),
+  });
   return parseJsonOrThrow<FeedbackItem>(res);
 }
 

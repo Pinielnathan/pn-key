@@ -102,6 +102,7 @@ def add_item(name: str, kind: str, text: str) -> dict:
         "text": text,
         "votes": 1,  # posting it counts as wanting it
         "status": "open",
+        "replies": [],
         "created_at": time.time(),
     }
     with _lock:
@@ -109,6 +110,65 @@ def add_item(name: str, kind: str, text: str) -> dict:
         items.insert(0, item)
         _save(sorted(items, key=_rank)[:MAX_STORED])
     return item
+
+
+def add_reply(item_id: str, name: str, text: str) -> dict | None:
+    reply = {
+        "id": uuid.uuid4().hex,
+        "name": name,
+        "text": text,
+        "created_at": time.time(),
+    }
+    with _lock:
+        items = _load()
+        for item in items:
+            if item["id"] == item_id:
+                # Entries written before replies existed have no list to append to.
+                item.setdefault("replies", []).append(reply)
+                _save(items)
+                return item
+    return None
+
+
+def delete_item(item_id: str) -> bool:
+    with _lock:
+        items = _load()
+        remaining = [i for i in items if i["id"] != item_id]
+        if len(remaining) == len(items):
+            return False
+        _save(remaining)
+        return True
+
+
+def delete_reply(item_id: str, reply_id: str) -> dict | None:
+    with _lock:
+        items = _load()
+        for item in items:
+            if item["id"] == item_id:
+                replies = item.get("replies", [])
+                remaining = [r for r in replies if r["id"] != reply_id]
+                if len(remaining) == len(replies):
+                    return None
+                item["replies"] = remaining
+                _save(items)
+                return item
+    return None
+
+
+STATUSES = ("open", "planned", "in-progress", "done", "declined")
+
+
+def set_status(item_id: str, status: str) -> dict | None:
+    if status not in STATUSES:
+        return None
+    with _lock:
+        items = _load()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = status
+                _save(items)
+                return item
+    return None
 
 
 def vote(item_id: str) -> dict | None:

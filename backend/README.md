@@ -80,6 +80,16 @@ The whole list is rewritten per write rather than appended to, which is only saf
 
 `moderation.py` screens submissions for profanity, sexual content and slurs. It is a blocklist, so treat it as a speed bump rather than a guarantee; entries are stored as plain records and can be removed by hand. It deliberately errs toward letting text through, because someone whose honest bug report is rejected has no way to appeal: matching is on whole words after normalisation, so "class", "assessment" and "Scunthorpe" pass while `f.u.c.k`, `sh1t`, `fuuuuuck` and `p0rn` don't. Measured at zero false positives and zero misses across both sets.
 
+### Admin
+
+`/#/admin` on the site is the moderation page: take entries or replies down, and set a status (open, planned, in-progress, done, declined). It isn't linked from the nav; you reach it by URL.
+
+Every admin route is guarded by a shared secret in `ADMIN_TOKEN`, sent as an `X-Admin-Token` header and compared with `secrets.compare_digest` so a wrong key can't be narrowed down by timing the failure. **With `ADMIN_TOKEN` unset every admin route returns 503 rather than falling back to a default** — an admin API that ships with a known password looks protected while being open to anyone who reads the source, which is strictly worse than one that's switched off.
+
+Rotate the key by redeploying with a new value; the page will simply ask for the new one. Note that `--set-env-vars` replaces the whole environment, so `ADMIN_TOKEN` has to be listed alongside the others on every deploy, exactly like the thread variables.
+
+The admin overview reports job counts by status rather than the job list. Job ids are the only thing standing between a stranger and someone else's uploaded audio, since the download route takes nothing but an id, so handing the full list to a page gives that away for no benefit the counts don't already cover.
+
 Rejections deliberately don't count against the per-IP rate limit. Checking and recording are separate calls for that reason: counting every attempt meant a few blocked tries locked someone out while they were still trying to write something publishable, which is the opposite of what a spam limit is for.
 
 ## Running it locally / self-hosted fallback

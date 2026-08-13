@@ -2,12 +2,116 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   fetchFeedback,
+  replyToFeedback,
   submitFeedback,
   voteFeedback,
   type FeedbackItem,
   type FeedbackKind,
 } from "../lib/api";
 import { Spinner } from "./Spinner";
+
+const STATUS_STYLES: Record<string, string> = {
+  planned: "text-sky-300 bg-sky-300/10",
+  "in-progress": "text-brand-lime bg-brand-lime/10",
+  done: "text-emerald-300 bg-emerald-300/10",
+  declined: "text-zinc-500 bg-white/5",
+};
+
+function ReplyThread({
+  item,
+  onReplied,
+}: {
+  item: FeedbackItem;
+  onReplied: (updated: FeedbackItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const replies = item.replies ?? [];
+
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onReplied(await replyToFeedback(item.id, { name, text }));
+      setText("");
+      setName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't post that reply.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs font-medium text-zinc-500 transition-colors hover:text-brand-lime"
+      >
+        {replies.length > 0
+          ? `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`
+          : "Reply"}
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 space-y-2 border-l border-white/10 pl-3">
+              {replies.map((reply) => (
+                <div key={reply.id}>
+                  <div className="flex flex-wrap items-center gap-x-2">
+                    <span className="text-xs font-semibold text-zinc-300">{reply.name}</span>
+                    <span className="text-[11px] text-zinc-600">{timeAgo(reply.created_at)}</span>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-400">{reply.text}</p>
+                </div>
+              ))}
+
+              <form onSubmit={send} className="space-y-2 pt-1">
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Your name (optional)"
+                  maxLength={40}
+                  className="w-full rounded-lg border border-zinc-700 bg-ink-900 px-2.5 py-1.5 text-xs text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-brand-lime"
+                />
+                <textarea
+                  value={text}
+                  onChange={(event) => setText(event.target.value.slice(0, MAX_TEXT))}
+                  placeholder="Add a reply"
+                  rows={2}
+                  className="w-full resize-y rounded-lg border border-zinc-700 bg-ink-900 px-2.5 py-1.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-brand-lime"
+                />
+                {error && <p className="text-xs text-red-400">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={!text.trim() || busy}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-brand-lime/40 hover:text-brand-lime disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {busy && <Spinner className="h-3 w-3" />}
+                  {busy ? "Posting" : "Post reply"}
+                </button>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 const MAX_TEXT = 600;
 const VOTED_KEY = "pnkey:votedSuggestions";
@@ -300,10 +404,25 @@ export function Suggestions() {
                 <div className="min-w-0 flex-1">
                   <div className="mb-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <KindTag kind={item.kind} />
+                    {item.status && item.status !== "open" && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          STATUS_STYLES[item.status] ?? "text-zinc-400 bg-white/5"
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    )}
                     <span className="text-sm font-semibold text-zinc-100">{item.name}</span>
                     <span className="text-xs text-zinc-600">{timeAgo(item.created_at)}</span>
                   </div>
                   <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">{item.text}</p>
+                  <ReplyThread
+                    item={item}
+                    onReplied={(updated) =>
+                      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))
+                    }
+                  />
                 </div>
               </motion.div>
             );

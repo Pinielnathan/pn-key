@@ -1,26 +1,37 @@
 import json
 import re
+import secrets
 import tempfile
 import threading
 import time
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from . import audio_ops, effects, feedback, moderation
 from .config import (
+    ADMIN_TOKEN,
     ALLOWED_ORIGINS,
+    FEEDBACK_BUCKET,
     FEEDBACK_RATE_LIMIT,
     FEEDBACK_RATE_WINDOW_SECONDS,
     MAX_UPLOAD_BYTES,
     STORAGE_DIR,
 )
-
-
-from .jobs import Job, create_job, get_job, heavy_slot
+from .jobs import Job, create_job, get_job, heavy_slot, jobs_snapshot
 
 
 class FeedbackSubmission(BaseModel):
@@ -29,6 +40,16 @@ class FeedbackSubmission(BaseModel):
     # Generous here on purpose: moderation.clean_submission owns the real limit
     # and returns a message explaining it, which is friendlier than a 422.
     text: str = Field(max_length=5000)
+
+
+class ReplySubmission(BaseModel):
+    name: str = Field(default="", max_length=200)
+    text: str = Field(max_length=5000)
+
+
+class StatusUpdate(BaseModel):
+    status: str
+
 
 # Job state lives in this process's memory, so anything that restarts the
 # process drops it. A poll for a job we don't have is therefore much more often
@@ -403,6 +424,91 @@ async def vote_feedback(item_id: str):
     if item is None:
         raise HTTPException(status_code=404, detail="That suggestion is no longer on the board.")
     return item
+
+
+@app.post("/api/feedback/{item_id}/replies")
+async def post_reply(item_id: str, request: Request, payload: ReplySubmission):
+    client_ip = _client_ip(request)
+    if _at_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="You've posted a few already. Give it a while before adding another.",
+        )
+
+    try:
+        name, text = moderation.clean_submission(payload.name, payload.text)
+    except moderation.SubmissionRejected as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    item = feedback.add_reply(item_id, name, text)
+    if item is None:
+        raise HTTPException(status_code=404, detail="That suggestion is no longer on the board.")
+    _record_post(client_ip)
+    return item
+
+
+def _require_admin(x_admin_token: str = Header(default="")) -> None:
+    """Guards every endpoint that can change or remove someone else's content.
+
+    With no ADMIN_TOKEN configured this refuses everything rather than falling
+    back to a default: an admin API with a shipped password looks protected
+    while being open to anyone who reads the source.
+
+    compare_digest rather than `==` so the comparison doesn't leak the token's
+    length or matching prefix through how long it takes to fail.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Admin access isn't configured on this server.")
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_TOKEN):
+        raise HTTPException(status_code=401, detail="That admin key isn't right.")
+
+
+@app.get("/api/admin/check")
+async def admin_check(_: None = Depends(_require_admin)):
+    """Lets the admin page verify a key before showing anything."""
+    return {"ok": True}
+
+
+@app.delete("/api/admin/feedback/{item_id}")
+async def admin_delete_item(item_id: str, _: None = Depends(_require_admin)):
+    if not feedback.delete_item(item_id):
+        raise HTTPException(status_code=404, detail="Already gone.")
+    return {"deleted": item_id}
+
+
+@app.delete("/api/admin/feedback/{item_id}/replies/{reply_id}")
+async def admin_delete_reply(item_id: str, reply_id: str, _: None = Depends(_require_admin)):
+    item = feedback.delete_reply(item_id, reply_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Already gone.")
+    return item
+
+
+@app.patch("/api/admin/feedback/{item_id}/status")
+async def admin_set_status(item_id: str, payload: StatusUpdate, _: None = Depends(_require_admin)):
+    item = feedback.set_status(item_id, payload.status)
+    if item is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status must be one of: {', '.join(feedback.STATUSES)}",
+        )
+    return item
+
+
+@app.get("/api/admin/overview")
+async def admin_overview(_: None = Depends(_require_admin)):
+    """What the admin dashboard shows at a glance, beyond the board itself."""
+    items = feedback.list_items(limit=feedback.MAX_STORED)
+    return {
+        "items": items,
+        "counts": {
+            "total": len(items),
+            "replies": sum(len(i.get("replies", [])) for i in items),
+            **{status: sum(1 for i in items if i.get("status") == status) for status in feedback.STATUSES},
+        },
+        "jobs_in_memory": jobs_snapshot(),
+        "storage": "cloud storage" if FEEDBACK_BUCKET else "local disk",
+    }
 
 
 @app.get("/api/health")

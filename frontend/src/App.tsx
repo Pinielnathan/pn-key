@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Admin } from "./components/Admin";
 import { EffectsPanel } from "./components/EffectsPanel";
 import { Faq } from "./components/Faq";
 import { LiveWaveform } from "./components/LiveWaveform";
 import { Reveal } from "./components/Reveal";
 import { RetunePanel } from "./components/RetunePanel";
-import { Suggestions } from "./components/Suggestions";
 import { SeparatePanel } from "./components/SeparatePanel";
+import { Suggestions } from "./components/Suggestions";
 import { loadFile, saveFile } from "./lib/fileStore";
-import { useHashRoute, type Tool } from "./lib/useHashRoute";
+import { useHashRoute, type Page, type Tool } from "./lib/useHashRoute";
 
-type Tab = Tool;
-
-const TABS: { id: Tab; label: string; blurb: string; icon: JSX.Element }[] = [
+const TABS: { id: Tool; label: string; blurb: string; icon: JSX.Element }[] = [
   {
     id: "retune",
     label: "Retune",
@@ -41,25 +40,18 @@ const STEPS = [
   { title: "Download tagged stems", body: "WAV and MP3, each carrying its BPM and key as ID3 metadata your DJ software reads." },
 ];
 
+const NAV: { page: Page; label: string }[] = [
+  { page: "home", label: "Tools" },
+  { page: "board", label: "Suggestions" },
+  { page: "help", label: "Help" },
+];
+
 const LAST_RECORDING_KEY = "pnkey:lastRecording";
 
 export default function App() {
-  const [tab, setTab] = useHashRoute();
+  const [route, navigate] = useHashRoute();
   const [lastRecording, setLastRecordingState] = useState<File | null>(null);
   const toolRef = useRef<HTMLElement>(null);
-
-  // Picking a tool should take you to it — otherwise choosing from up in the
-  // hero silently swaps a panel that's still below the fold.
-  const selectTool = useCallback(
-    (next: Tab) => {
-      setTab(next);
-      toolRef.current?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "start",
-      });
-    },
-    [setTab],
-  );
 
   useEffect(() => {
     loadFile(LAST_RECORDING_KEY)
@@ -69,16 +61,36 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Every page change starts at the top. Carrying the previous page's scroll
+  // position over makes a freshly opened page look like it loaded half way down.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [route.page]);
+
   function setLastRecording(file: File) {
     setLastRecordingState(file);
     saveFile(LAST_RECORDING_KEY, file).catch(() => {});
   }
 
-  const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
+  const selectTool = useCallback(
+    (next: Tool) => {
+      navigate({ page: "home", tool: next });
+      // Only scroll when the tool is already on screen. Arriving from another
+      // page, the reset above is what should win.
+      if (route.page === "home") {
+        toolRef.current?.scrollIntoView({
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+          block: "start",
+        });
+      }
+    },
+    [navigate, route.page],
+  );
+
+  const activeTab = TABS.find((t) => t.id === route.tool) ?? TABS[0];
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      {/* Ambient brand glow, drifting slowly behind everything */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="animate-drift absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full bg-brand-lime/10 blur-[120px]" />
         <div
@@ -88,16 +100,16 @@ export default function App() {
       </div>
       <div className="grain-overlay" aria-hidden />
 
-      <div className="relative z-10">
-        <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5">
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-5">
           <motion.button
             type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onClick={() => navigate({ page: "home" })}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="flex items-center gap-2.5"
-            aria-label="Back to top"
+            aria-label="PN Key home"
           >
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-brand-lime/20 blur-lg" aria-hidden />
@@ -105,182 +117,200 @@ export default function App() {
             </div>
             <span className="text-base font-bold tracking-tight text-zinc-50">PN Key</span>
           </motion.button>
-          <motion.button
-            type="button"
-            onClick={() => selectTool(tab)}
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-            className="rounded-lg border border-white/10 px-3.5 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:border-brand-lime/50 hover:text-brand-lime"
-          >
-            Open the tool
-          </motion.button>
-        </header>
 
-        {/* ---------- Hero ---------- */}
-        <section id="top" className="mx-auto max-w-5xl px-4 pb-4 pt-8 text-center sm:pt-14">
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto max-w-3xl text-balance text-3xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-5xl"
-          >
-            Split any song into stems.{" "}
-            <span className="bg-gradient-to-r from-brand-lime to-brand-gold bg-clip-text text-transparent">
-              Retune any vocal.
-            </span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto mt-4 max-w-xl text-pretty text-sm leading-relaxed text-zinc-400 sm:text-base"
-          >
-            Isolate vocals and instrumentals, shift a take to a new tempo and key, or run it through a
-            studio effect chain. Every download is tagged with its BPM and key.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-8"
-          >
-            <LiveWaveform className="cursor-crosshair" />
-            <p className="mt-2 text-xs text-zinc-600">Move your cursor across the waveform</p>
-          </motion.div>
-
-          <motion.button
-            type="button"
-            onClick={() => selectTool(tab)}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.36 }}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.97 }}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-lime px-6 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark"
-          >
-            Start processing
-          </motion.button>
-        </section>
-
-        {/* ---------- The tool ---------- */}
-        <section ref={toolRef} id="tool" className="mx-auto max-w-2xl scroll-mt-6 px-4 py-12 sm:py-16">
-          <div className="mb-5 grid gap-2 sm:grid-cols-3">
-            {TABS.map(({ id, label, icon }) => (
-              <motion.button
-                key={id}
-                onClick={() => selectTool(id)}
-                aria-current={tab === id ? "page" : undefined}
-                whileTap={{ scale: 0.97 }}
-                className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
-                  tab === id
-                    ? "border-brand-lime/60 text-ink-950"
-                    : "border-white/8 bg-ink-900/60 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+          <nav className="flex items-center gap-1">
+            {NAV.map(({ page, label }) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => navigate({ page })}
+                aria-current={route.page === page ? "page" : undefined}
+                className={`relative rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  route.page === page ? "text-brand-lime" : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                {tab === id && (
+                {route.page === page && (
                   <motion.span
-                    layoutId="active-tab"
+                    layoutId="nav-active"
                     transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                    className="absolute inset-0 bg-brand-lime shadow-glow"
+                    className="absolute inset-0 rounded-lg bg-brand-lime/10"
                   />
                 )}
-                <svg
-                  className="relative h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {icon}
-                </svg>
                 <span className="relative">{label}</span>
-              </motion.button>
+              </button>
             ))}
-          </div>
+          </nav>
+        </header>
 
+        <main className="flex-1">
           <AnimatePresence mode="wait">
-            <motion.p
-              key={`blurb-${tab}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="mb-5 text-center text-xs text-zinc-500"
+            <motion.div
+              key={route.page}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-              {activeTab.blurb}
-            </motion.p>
+              {route.page === "home" && (
+                <>
+                  <section className="mx-auto max-w-5xl px-4 pb-4 pt-6 text-center sm:pt-12">
+                    <motion.h1
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                      className="mx-auto max-w-3xl text-balance text-3xl font-bold leading-tight tracking-tight text-zinc-50 sm:text-5xl"
+                    >
+                      Split any song into stems.{" "}
+                      <span className="bg-gradient-to-r from-brand-lime to-brand-gold bg-clip-text text-transparent">
+                        Retune any vocal.
+                      </span>
+                    </motion.h1>
+
+                    <motion.p
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+                      className="mx-auto mt-4 max-w-xl text-pretty text-sm leading-relaxed text-zinc-400 sm:text-base"
+                    >
+                      Isolate vocals and instrumentals, shift a take to a new tempo and key, or run it
+                      through a studio effect chain. Every download is tagged with its BPM and key.
+                    </motion.p>
+
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.8, delay: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                      className="mt-7"
+                    >
+                      <LiveWaveform className="cursor-crosshair" height={72} />
+                    </motion.div>
+                  </section>
+
+                  <section ref={toolRef} id="tool" className="mx-auto max-w-2xl scroll-mt-6 px-4 pb-16 pt-4">
+                    <div className="mb-5 grid gap-2 sm:grid-cols-3">
+                      {TABS.map(({ id, label, icon }) => (
+                        <motion.button
+                          key={id}
+                          onClick={() => selectTool(id)}
+                          aria-current={route.tool === id ? "page" : undefined}
+                          whileTap={{ scale: 0.97 }}
+                          className={`relative flex items-center justify-center gap-2 overflow-hidden rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+                            route.tool === id
+                              ? "border-brand-lime/60 text-ink-950"
+                              : "border-white/8 bg-ink-900/60 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                          }`}
+                        >
+                          {route.tool === id && (
+                            <motion.span
+                              layoutId="active-tab"
+                              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                              className="absolute inset-0 bg-brand-lime shadow-glow"
+                            />
+                          )}
+                          <svg
+                            className="relative h-4 w-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.9"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            {icon}
+                          </svg>
+                          <span className="relative">{label}</span>
+                        </motion.button>
+                      ))}
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                      <motion.p
+                        key={`blurb-${route.tool}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="mb-5 text-center text-xs text-zinc-500"
+                      >
+                        {activeTab.blurb}
+                      </motion.p>
+                    </AnimatePresence>
+
+                    <div className="rounded-2xl border border-white/5 bg-ink-900/40 p-4 backdrop-blur sm:p-6">
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={route.tool}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -8 }}
+                          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          {route.tool === "retune" && (
+                            <RetunePanel lastRecording={lastRecording} onRecorded={setLastRecording} />
+                          )}
+                          {route.tool === "separate" && (
+                            <SeparatePanel lastRecording={lastRecording} onRecorded={setLastRecording} />
+                          )}
+                          {route.tool === "effects" && (
+                            <EffectsPanel lastRecording={lastRecording} onRecorded={setLastRecording} />
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {route.page === "board" && (
+                <section className="mx-auto max-w-3xl px-4 pb-16 pt-4">
+                  <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
+                    Ask for a feature, report a bug
+                  </h1>
+                  <p className="mx-auto mt-2 max-w-lg text-center text-sm text-zinc-500">
+                    Anyone can post, reply, and back what's already there. The most wanted rise to the top.
+                  </p>
+                  <div className="mt-8">
+                    <Suggestions />
+                  </div>
+                </section>
+              )}
+
+              {route.page === "help" && (
+                <section className="mx-auto max-w-3xl px-4 pb-16 pt-4">
+                  <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
+                    How it works
+                  </h1>
+                  <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                    {STEPS.map((step, i) => (
+                      <Reveal key={step.title} delay={i * 0.08}>
+                        <div className="group h-full rounded-2xl border border-white/5 bg-ink-900/50 p-5 transition-colors hover:border-brand-lime/30">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-lime/10 font-mono text-sm font-bold text-brand-lime transition-transform duration-300 group-hover:scale-110">
+                            {i + 1}
+                          </span>
+                          <h3 className="mt-3 font-semibold text-zinc-100">{step.title}</h3>
+                          <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{step.body}</p>
+                        </div>
+                      </Reveal>
+                    ))}
+                  </div>
+
+                  <h2 className="mb-6 mt-14 text-center text-2xl font-bold tracking-tight text-zinc-50">
+                    Questions, answered
+                  </h2>
+                  <Faq />
+                </section>
+              )}
+
+              {route.page === "admin" && (
+                <section className="mx-auto max-w-3xl px-4 pb-16 pt-4">
+                  <Admin />
+                </section>
+              )}
+            </motion.div>
           </AnimatePresence>
+        </main>
 
-          <div className="rounded-2xl border border-white/5 bg-ink-900/40 p-4 backdrop-blur sm:p-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              >
-                {tab === "retune" && <RetunePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-                {tab === "separate" && <SeparatePanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-                {tab === "effects" && <EffectsPanel lastRecording={lastRecording} onRecorded={setLastRecording} />}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </section>
-
-        {/* ---------- How it works ---------- */}
-        <section className="mx-auto max-w-5xl px-4 py-12">
-          <Reveal>
-            <h2 className="text-center text-2xl font-bold tracking-tight text-zinc-50">How it works</h2>
-          </Reveal>
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            {STEPS.map((step, i) => (
-              <Reveal key={step.title} delay={i * 0.1}>
-                <div className="group h-full rounded-2xl border border-white/5 bg-ink-900/50 p-5 transition-colors hover:border-brand-lime/30">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-lime/10 font-mono text-sm font-bold text-brand-lime transition-transform duration-300 group-hover:scale-110">
-                    {i + 1}
-                  </span>
-                  <h3 className="mt-3 font-semibold text-zinc-100">{step.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{step.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* ---------- Suggestions ---------- */}
-        <section id="suggestions" className="mx-auto max-w-3xl scroll-mt-6 px-4 py-12">
-          <Reveal>
-            <h2 className="mb-2 text-center text-2xl font-bold tracking-tight text-zinc-50">
-              Ask for a feature, report a bug
-            </h2>
-            <p className="mb-6 text-center text-sm text-zinc-500">
-              Anyone can post, and anyone can back what's already there. The most wanted rise to the top.
-            </p>
-          </Reveal>
-          <Reveal delay={0.08}>
-            <Suggestions />
-          </Reveal>
-        </section>
-
-        {/* ---------- FAQ ---------- */}
-        <section className="mx-auto max-w-3xl px-4 py-12">
-          <Reveal>
-            <h2 className="mb-6 text-center text-2xl font-bold tracking-tight text-zinc-50">
-              Questions, answered
-            </h2>
-          </Reveal>
-          <Reveal delay={0.08}>
-            <Faq />
-          </Reveal>
-        </section>
-
-        <footer className="mx-auto max-w-3xl border-t border-white/5 px-4 py-8 text-xs text-zinc-500">
+        <footer className="mx-auto w-full max-w-5xl border-t border-white/5 px-4 py-6 text-xs text-zinc-500">
           <p>Only upload audio you have the rights to process.</p>
           <p className="mt-3">
             Built by{" "}
