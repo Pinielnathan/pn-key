@@ -10,7 +10,7 @@ gcloud run deploy pn-key-backend \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw \
+  --set-env-vars ALLOWED_ORIGINS=https://pnkey.chitemere.co.zw,OMP_NUM_THREADS=8,MKL_NUM_THREADS=8 \
   --memory 4Gi \
   --cpu 8 \
   --timeout 300 \
@@ -26,12 +26,14 @@ A 3m20s track separates in about **140s**, down from ~380s. In order of what eac
 | Change | Effect |
 |---|---|
 | `--cpu 8` (was 2) | 380s → 180s |
-| `OMP_NUM_THREADS` / `MKL_NUM_THREADS` pinned to the vCPU count (set in the Dockerfile) | 180s → 138s |
+| `OMP_NUM_THREADS` / `MKL_NUM_THREADS` pinned to the vCPU count | 180s → 130s |
 | Demucs `--overlap` 0.1 (was 0.25) | ~23% of the Demucs portion |
 | Detection at 22.05kHz with a halved hop length | 9.8s → 2.8s |
 | librosa/numba JIT warmed at startup | ~20s off the first request after a cold start |
 
 More cores is close to cost-neutral rather than a splurge: Cloud Run bills CPU-seconds, so 4× the cores for roughly ¼ the wall time is about the same money per job, and less on memory-seconds. The old 2-vCPU setting was paying nearly the same to be four times slower.
+
+**The two thread variables have to be in `--set-env-vars`, and `--set-env-vars` replaces the whole environment** — so every one of them has to be listed on every deploy, which is why `ALLOWED_ORIGINS` and both thread variables appear together in the command above. Dropping them is a silent 35% slowdown (130s → 200s) with nothing in the logs to say anything changed. Setting them as an image `ENV` in the Dockerfile instead looks like it should work and does not: that was tried and measured at the 200s figure, i.e. no effect at all.
 
 **The rest is Demucs on a CPU, which is near its floor here.** `--segment` is already at 7, the largest window htdemucs accepts, and the overlap is already cut. Going meaningfully faster means changing the hardware or the model, and both are trade-offs rather than free wins:
 
