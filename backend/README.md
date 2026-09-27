@@ -134,3 +134,7 @@ pinned: false
 ```
 
 To push to a Space: `git remote add hf https://huggingface.co/spaces/<user>/pn-key-backend && git push hf main` (credentials: your HF username + a **write** access token as the password).
+
+## Chitemere HQ
+
+`POST /api/admin/owner { owner }` lets the Chitemere HQ phone app connect with the owner token instead of the pasted admin key. The token is checked with chitemere.co.zw (`/api/hq/owner/verify`), and only on yes is `ADMIN_TOKEN` returned. Ten refusals from one address in ten minutes stop it answering for a while. It needs no new variable, but the backend has to be redeployed with the command above before the app can use it.

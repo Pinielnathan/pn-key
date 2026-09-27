@@ -481,6 +481,63 @@ async def admin_check(_: None = Depends(_require_admin)):
     return {"ok": True}
 
 
+class OwnerSignIn(BaseModel):
+    owner: str = Field(max_length=2000)
+
+
+# The owner service behind the Chitemere HQ phone app. It holds the owner's
+# passcode; this server only ever asks it whether a token is good.
+HQ_HUB = "https://chitemere.co.zw"
+_owner_attempts: dict[str, list[float]] = {}
+
+
+def _owner_vouched(token: str) -> bool:
+    """Asks chitemere.co.zw whether the phone that sent this token was opened with the owner's passcode."""
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps({"token": token}).encode()
+    req = urllib.request.Request(
+        f"{HQ_HUB}/api/hq/owner/verify",
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as res:
+            answer = json.loads(res.read().decode() or "{}")
+            return res.status == 200 and answer.get("ok") is True
+    except (urllib.error.URLError, ValueError, TimeoutError):
+        return False
+
+
+@app.post("/api/admin/owner")
+def admin_owner(payload: OwnerSignIn, request: Request):
+    """Chitemere HQ connecting with the owner token instead of the pasted key.
+
+    chitemere.co.zw is asked whether it vouches for the token, and only on yes is
+    the admin key handed back, so the owner never has to find and paste it. A
+    handful of refusals from one address in ten minutes stops it answering.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Admin access isn't configured on this server.")
+    client_ip = _client_ip(request)
+    now = time.time()
+    with _rate_lock:
+        recent = [t for t in _owner_attempts.get(client_ip, []) if now - t < 600]
+        _owner_attempts[client_ip] = recent
+        if len(recent) >= 10:
+            raise HTTPException(status_code=429, detail="Too many attempts. Wait a few minutes and try again.")
+    if not payload.owner.startswith("hq1.") or not _owner_vouched(payload.owner):
+        with _rate_lock:
+            _owner_attempts.setdefault(client_ip, []).append(now)
+        raise HTTPException(
+            status_code=401,
+            detail="Chitemere HQ did not vouch for this phone. Lock the app, open it with your passcode and try again.",
+        )
+    return {"key": ADMIN_TOKEN}
+
+
 @app.delete("/api/admin/feedback/{item_id}")
 async def admin_delete_item(item_id: str, _: None = Depends(_require_admin)):
     if not feedback.delete_item(item_id):
