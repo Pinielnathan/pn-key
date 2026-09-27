@@ -334,5 +334,9 @@ export async function adminLink(body: { action: string; secret?: string }): Prom
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  // The backend is deployed by hand, so the page can be ahead of it.
+  if (res.status === 404 || res.status === 405) {
+    throw new Error("The server doesn't have the phone sign-in yet. Use the admin key until the backend is redeployed.");
+  }
   return parseJsonOrThrow(res);
 }
