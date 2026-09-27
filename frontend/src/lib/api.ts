@@ -321,3 +321,18 @@ export async function pollJobUntilDone(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 }
+
+export type AdminLinkStart = { secret: string; code: string; svg: string; expiresAt: number };
+export type AdminLinkClaim = { state: "waiting" | "expired" | "error" } | { state: "approved"; key: string };
+
+/** Signing the admin page in from Chitemere HQ on the owner's phone: start shows a code, claim collects the approval. */
+export async function adminLink(body: { action: "start" }): Promise<AdminLinkStart>;
+export async function adminLink(body: { action: "claim"; secret: string }): Promise<AdminLinkClaim>;
+export async function adminLink(body: { action: string; secret?: string }): Promise<AdminLinkStart | AdminLinkClaim> {
+  const res = await fetch(`${API_BASE}/api/admin/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return parseJsonOrThrow(res);
+}

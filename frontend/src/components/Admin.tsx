@@ -10,6 +10,7 @@ import {
   type AdminOverview,
   type FeedbackItem,
 } from "../lib/api";
+import { PhoneSignIn } from "./PhoneSignIn";
 import { Spinner } from "./Spinner";
 
 const KEY_STORAGE = "pnkey:adminKey";
@@ -73,6 +74,9 @@ export function Admin() {
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  // The owner's phone instead of the key: a QR code and six digits that
+  // Chitemere HQ approves, after which the server hands the key over.
+  const [withPhone, setWithPhone] = useState(false);
 
   const [data, setData] = useState<AdminOverview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -162,6 +166,14 @@ export function Admin() {
     } finally {
       setChecking(false);
     }
+  }
+
+  function signedInFromPhone(adminKey: string) {
+    setKey(adminKey);
+    setAuthed(true);
+    setWithPhone(false);
+    if (remember) localStorage.setItem(KEY_STORAGE, adminKey);
+    void load(adminKey);
   }
 
   function signOut() {
@@ -294,6 +306,34 @@ export function Admin() {
     );
   }
 
+  if (!authed && withPhone) {
+    return (
+      <div className="mx-auto max-w-sm space-y-3 rounded-2xl border border-white/5 bg-ink-900/50 p-5">
+        <div>
+          <h2 className="text-lg font-semibold text-zinc-100">Admin</h2>
+          <p className="mt-1 text-sm text-zinc-500">Approve this browser from Chitemere HQ on your phone.</p>
+        </div>
+        <PhoneSignIn onKey={signedInFromPhone} />
+        <label className="flex items-center gap-2 text-xs text-zinc-400">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => setRemember(event.target.checked)}
+            className="h-3.5 w-3.5 accent-brand-lime"
+          />
+          Keep me signed in on this device
+        </label>
+        <button
+          type="button"
+          onClick={() => setWithPhone(false)}
+          className="w-full text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+        >
+          Use the admin key instead
+        </button>
+      </div>
+    );
+  }
+
   if (!authed) {
     return (
       <form onSubmit={signIn} className="mx-auto max-w-sm space-y-3 rounded-2xl border border-white/5 bg-ink-900/50 p-5">
@@ -330,6 +370,16 @@ export function Admin() {
         >
           {checking && <Spinner className="h-3.5 w-3.5" />}
           Sign in
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthError(null);
+            setWithPhone(true);
+          }}
+          className="w-full rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-white/25"
+        >
+          Sign in with Chitemere HQ on your phone
         </button>
       </form>
     );

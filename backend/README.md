@@ -137,4 +137,8 @@ To push to a Space: `git remote add hf https://huggingface.co/spaces/<user>/pn-k
 
 ## Chitemere HQ
 
-`POST /api/admin/owner { owner }` lets the Chitemere HQ phone app connect with the owner token instead of the pasted admin key. The token is checked with chitemere.co.zw (`/api/hq/owner/verify`), and only on yes is `ADMIN_TOKEN` returned. Ten refusals from one address in ten minutes stop it answering for a while. It needs no new variable, but the backend has to be redeployed with the command above before the app can use it.
+`POST /api/admin/owner { owner }` lets the Chitemere HQ phone app connect with the owner token instead of the pasted admin key. The token is checked with chitemere.co.zw (`/api/hq/owner/verify`), and only on yes is `ADMIN_TOKEN` returned. Ten refusals from one address in ten minutes stop it answering for a while.
+
+`POST /api/admin/link` signs the admin page (`#/pegasus`) in from the phone: `{ action: "start" }` gets a QR code and six digits from chitemere.co.zw for the page to show, and `{ action: "claim", secret }` asks whether the owner approved them in Chitemere HQ, handing `ADMIN_TOKEN` to that browser once they have. chitemere.co.zw hands each approval out once, only for the secret the page was given.
+
+Neither needs a new variable, but the backend has to be redeployed with the command above before the app or the page can use them.

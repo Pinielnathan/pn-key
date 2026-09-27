@@ -491,24 +491,35 @@ HQ_HUB = "https://chitemere.co.zw"
 _owner_attempts: dict[str, list[float]] = {}
 
 
-def _owner_vouched(token: str) -> bool:
-    """Asks chitemere.co.zw whether the phone that sent this token was opened with the owner's passcode."""
+def _hub_post(path: str, body: dict) -> tuple[int, dict | None]:
+    """POSTs to chitemere.co.zw: (status, answer), with status 0 when it could not be reached."""
     import urllib.error
     import urllib.request
 
-    body = json.dumps({"token": token}).encode()
     req = urllib.request.Request(
-        f"{HQ_HUB}/api/hq/owner/verify",
-        data=body,
+        f"{HQ_HUB}{path}",
+        data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as res:
-            answer = json.loads(res.read().decode() or "{}")
-            return res.status == 200 and answer.get("ok") is True
+            answer = json.loads(res.read().decode() or "null")
+            return res.status, answer if isinstance(answer, dict) else None
+    except urllib.error.HTTPError as exc:
+        try:
+            answer = json.loads(exc.read().decode() or "null")
+        except ValueError:
+            answer = None
+        return exc.code, answer if isinstance(answer, dict) else None
     except (urllib.error.URLError, ValueError, TimeoutError):
-        return False
+        return 0, None
+
+
+def _owner_vouched(token: str) -> bool:
+    """Asks chitemere.co.zw whether the phone that sent this token was opened with the owner's passcode."""
+    status, answer = _hub_post("/api/hq/owner/verify", {"token": token})
+    return status == 200 and answer is not None and answer.get("ok") is True
 
 
 @app.post("/api/admin/owner")
@@ -536,6 +547,85 @@ def admin_owner(payload: OwnerSignIn, request: Request):
             detail="Chitemere HQ did not vouch for this phone. Lock the app, open it with your passcode and try again.",
         )
     return {"key": ADMIN_TOKEN}
+
+
+class LinkStep(BaseModel):
+    action: str = Field(max_length=10)
+    secret: str = Field(default="", max_length=200)
+
+
+_SVG_START = re.compile(r"^(<\?xml[^>]*>\s*)?<svg[\s>]", re.I)
+_SVG_END = re.compile(r"</svg>\s*$", re.I)
+_SVG_UNSAFE = re.compile(r"<script|<foreignObject|\son[a-z]+\s*=|javascript:|<iframe|<image|href\s*=", re.I)
+
+
+def _safe_svg(svg: object) -> str | None:
+    """The QR as drawn by chitemere.co.zw, kept only if it is plainly an SVG and nothing else."""
+    if not isinstance(svg, str) or len(svg) > 60_000:
+        return None
+    s = svg.strip()
+    if not _SVG_START.match(s) or not _SVG_END.search(s) or _SVG_UNSAFE.search(s):
+        return None
+    return s
+
+
+def _requester(request: Request) -> str:
+    """Which browser is asking, for the owner's phone to show before it approves."""
+    ua = request.headers.get("user-agent", "")
+    browser = next(
+        (name for mark, name in (("Edg/", "Edge"), ("OPR/", "Opera"), ("Firefox/", "Firefox"), ("Chrome/", "Chrome"), ("Safari/", "Safari")) if mark in ua),
+        "A browser",
+    )
+    system = next(
+        (name for mark, name in (("Windows", "Windows"), ("Android", "Android"), ("iPhone", "iPhone or iPad"), ("iPad", "iPhone or iPad"), ("Mac OS X", "Mac"), ("Linux", "Linux")) if mark in ua),
+        "",
+    )
+    return f"{browser} on {system}" if system else browser
+
+
+@app.post("/api/admin/link")
+def admin_link(payload: LinkStep, request: Request):
+    """Signs the admin page in from the owner's phone instead of the pasted key.
+
+    The page asks for a code to show (start): a QR code and six digits from
+    chitemere.co.zw. The owner scans it with Chitemere HQ, or types the digits,
+    and approves it. The page asks every couple of seconds whether that has
+    happened (claim); chitemere.co.zw hands each approval out once, only for the
+    secret this browser was given, and only then is the admin key handed back.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=503, detail="Admin access isn't configured on this server.")
+    if payload.action == "start":
+        status, answer = _hub_post(
+            "/api/hq/owner/link/start",
+            {"site": "pnkey", "requester": _requester(request), "ip": _client_ip(request)},
+        )
+        svg = _safe_svg((answer or {}).get("svg"))
+        if status == 200 and answer and answer.get("secret") and answer.get("code") and svg:
+            expires = answer.get("expiresAt")
+            return {
+                "secret": answer["secret"],
+                "code": answer["code"],
+                "svg": svg,
+                "expiresAt": expires if isinstance(expires, (int, float)) else int(time.time() * 1000) + 180_000,
+            }
+        if status == 0:
+            raise HTTPException(status_code=503, detail="Chitemere HQ could not be reached. Use the admin key instead.")
+        raise HTTPException(
+            status_code=status if status >= 400 else 502,
+            detail=(answer or {}).get("error") or "Chitemere HQ could not start a sign-in. Try again.",
+        )
+    if payload.action == "claim":
+        if len(payload.secret) < 20:
+            return {"state": "expired"}
+        status, answer = _hub_post("/api/hq/owner/link/claim", {"secret": payload.secret, "site": "pnkey"})
+        # A missed answer is asked again on the page's next poll.
+        if status != 200 or answer is None:
+            return {"state": "error"}
+        if answer.get("state") == "approved":
+            return {"state": "approved", "key": ADMIN_TOKEN}
+        return {"state": "waiting" if answer.get("state") == "waiting" else "expired"}
+    raise HTTPException(status_code=400, detail="Say start or claim.")
 
 
 @app.delete("/api/admin/feedback/{item_id}")
