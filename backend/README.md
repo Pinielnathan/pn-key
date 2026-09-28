@@ -4,6 +4,23 @@ FastAPI service for [PN Key](https://pnkey.chitemere.co.zw) — BPM/key auto-det
 
 ## Deploying — Google Cloud Run (primary, live)
 
+### Redeploying new code
+
+Run it from **this `backend` folder**, not the repo root:
+
+```
+cd backend
+gcloud run deploy pn-key-backend --source . --region us-central1
+```
+
+This keeps everything already set on the service, including `ADMIN_TOKEN`, the thread variables, memory, CPU and max instances, and changes only the code.
+
+Run from the repo root, the upload has no `Dockerfile` at its top level, so Cloud Build falls back to Google's Python buildpack. That fails with `for Python, provide a main.py or app.py file`, and the live revision stays as it was.
+
+### First deploy, or changing settings
+
+The full command below sets the service up from scratch. Its `--set-env-vars` replaces the whole environment, so add `ADMIN_TOKEN` to it (see [Admin](#admin)) or the admin page stops working.
+
 ```
 cd backend
 gcloud run deploy pn-key-backend \
