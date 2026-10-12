@@ -311,7 +311,16 @@ export default function App() {
         </main>
 
         <footer className="mx-auto w-full max-w-5xl border-t border-white/5 px-4 py-6 text-xs text-zinc-500">
-          <p>Only upload audio you have the rights to process.</p>
+          <p>
+            Only upload audio you have the rights to process. Uploads are deleted from our server within an hour.{" "}
+            <a href="https://chitemere.co.zw/privacy" className="text-zinc-400 underline underline-offset-2 transition-colors hover:text-brand-lime">
+              Privacy
+            </a>{" "}
+            ·{" "}
+            <a href="https://chitemere.co.zw/terms" className="text-zinc-400 underline underline-offset-2 transition-colors hover:text-brand-lime">
+              Terms
+            </a>
+          </p>
           <p className="mt-3">
             Built by{" "}
             <a
@@ -324,7 +333,7 @@ export default function App() {
             </a>
             . Questions, feedback, or want to collaborate?{" "}
             <a
-              href="mailto:pinielchitemere10@gmail.com"
+              href="mailto:hello@chitemere.co.zw"
               className="text-zinc-400 transition-colors hover:text-brand-lime"
             >
               Email me
