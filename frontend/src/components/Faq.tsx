@@ -50,7 +50,7 @@ export function Faq() {
               <motion.span
                 animate={{ rotate: isOpen ? 45 : 0 }}
                 transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                className={`shrink-0 text-lg leading-none transition-colors ${isOpen ? "text-brand-lime" : "text-zinc-500"}`}
+                className={`shrink-0 text-lg leading-none transition-colors ${isOpen ? "text-brand-lime" : "text-zinc-400"}`}
                 aria-hidden
               >
                 +

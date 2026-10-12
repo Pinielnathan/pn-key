@@ -270,10 +270,10 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
       </div>
 
       {filteredPresets.length === 0 && presets.length > 0 && (
-        <p className="text-sm text-zinc-500">No presets match that search.</p>
+        <p className="text-sm text-zinc-400">No presets match that search.</p>
       )}
 
-      <div className="flex items-center justify-between text-xs text-zinc-500">
+      <div className="flex items-center justify-between text-xs text-zinc-400">
         <span>Click to select. Pick more than one to chain them in order.</span>
         {selectedPresets.length > 0 && (
           <span className="rounded-full bg-brand-lime/10 px-2 py-0.5 font-medium text-brand-lime">
@@ -317,7 +317,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
                   </svg>
                 )}
                 <span className="block pr-4 font-medium">{preset.name}</span>
-                <span className="mt-0.5 block text-xs text-zinc-500 line-clamp-2">{preset.description}</span>
+                <span className="mt-0.5 block text-xs text-zinc-400 line-clamp-2">{preset.description}</span>
               </motion.button>
             );
           })}
@@ -355,7 +355,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
           {isPreviewing && <Spinner className="h-3.5 w-3.5" />}
           {isPreviewing ? "Rendering preview…" : "Preview"}
         </button>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-zinc-400">
           Quick sample from the first {files.length > 1 ? "file" : "upload"}, not the full render.
         </span>
       </div>
@@ -373,7 +373,7 @@ export function EffectsPanel({ lastRecording, onRecorded }: EffectsPanelProps) {
         onClick={handleSubmit}
         disabled={!canSubmit}
         whileTap={canSubmit ? { scale: 0.98 } : undefined}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
       >
         {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning

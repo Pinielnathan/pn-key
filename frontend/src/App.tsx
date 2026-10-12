@@ -230,7 +230,7 @@ export default function App() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="mb-5 text-center text-xs text-zinc-500"
+                        className="mb-5 text-center text-xs text-zinc-400"
                       >
                         {activeTab.blurb}
                       </motion.p>
@@ -266,7 +266,7 @@ export default function App() {
                   <h1 className="text-center text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
                     Ask for a feature, report a bug
                   </h1>
-                  <p className="mx-auto mt-2 max-w-lg text-center text-sm text-zinc-500">
+                  <p className="mx-auto mt-2 max-w-lg text-center text-sm text-zinc-400">
                     Anyone can post, reply, and back what's already there. The most wanted rise to the top.
                   </p>
                   <div className="mt-8">
@@ -310,7 +310,7 @@ export default function App() {
           </AnimatePresence>
         </main>
 
-        <footer className="mx-auto w-full max-w-5xl border-t border-white/5 px-4 py-6 text-xs text-zinc-500">
+        <footer className="mx-auto w-full max-w-5xl border-t border-white/5 px-4 py-6 text-xs text-zinc-400">
           <p>
             Only upload audio you have the rights to process. Uploads are deleted from our server within an hour.{" "}
             <a href="https://chitemere.co.zw/privacy" className="text-zinc-400 underline underline-offset-2 transition-colors hover:text-brand-lime">
@@ -327,14 +327,14 @@ export default function App() {
               href="https://chitemere.co.zw"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-400 transition-colors hover:text-brand-lime"
+              className="text-zinc-300 underline underline-offset-2 transition-colors hover:text-brand-lime"
             >
               Piniel Chitemere
             </a>
             . Questions, feedback, or want to collaborate?{" "}
             <a
               href="mailto:hello@chitemere.co.zw"
-              className="text-zinc-400 transition-colors hover:text-brand-lime"
+              className="text-zinc-300 underline underline-offset-2 transition-colors hover:text-brand-lime"
             >
               Email me
             </a>{" "}
@@ -343,7 +343,7 @@ export default function App() {
               href="https://instagram.com/piniel_nathan1"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-400 transition-colors hover:text-brand-lime"
+              className="text-zinc-300 underline underline-offset-2 transition-colors hover:text-brand-lime"
             >
               Instagram
             </a>

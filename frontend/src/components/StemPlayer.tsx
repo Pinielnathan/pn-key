@@ -150,7 +150,7 @@ export function StemPlayer({ tracks }: StemPlayerProps) {
           disabled={!allReady}
           whileTap={allReady ? { scale: 0.92 } : undefined}
           whileHover={allReady ? { scale: 1.06 } : undefined}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-lime text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-lime text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
           aria-label={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? (
@@ -169,7 +169,7 @@ export function StemPlayer({ tracks }: StemPlayerProps) {
           <p className="text-sm font-medium text-zinc-200">
             {tracks.length > 1 ? `${tracks.length} stems · played together` : tracks[0]?.label}
           </p>
-          <p className="font-mono text-xs tabular-nums text-zinc-500">
+          <p className="font-mono text-xs tabular-nums text-zinc-400">
             {formatTime(currentTime)} / {formatTime(duration)}
           </p>
         </div>
@@ -189,7 +189,7 @@ export function StemPlayer({ tracks }: StemPlayerProps) {
                   onClick={() => toggleMute(track.id)}
                   disabled={load?.status !== "ready"}
                   className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium transition-colors disabled:opacity-40 ${
-                    isMuted ? "bg-white/5 text-zinc-500" : "text-zinc-200 hover:bg-white/5"
+                    isMuted ? "bg-white/5 text-zinc-400" : "text-zinc-200 hover:bg-white/5"
                   }`}
                   aria-pressed={isMuted}
                 >

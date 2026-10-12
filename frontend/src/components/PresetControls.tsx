@@ -23,7 +23,7 @@ export function PresetControls<T>({ filename, kind, getData, onLoad, onError }: 
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-zinc-500">Preset file:</span>
+      <span className="text-zinc-400">Preset file:</span>
       <button
         type="button"
         onClick={() => downloadPresetFile(filename, kind, getData())}

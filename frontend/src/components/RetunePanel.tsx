@@ -435,7 +435,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
             className="w-24 rounded-lg border border-zinc-700 bg-ink-900 px-2 py-1 text-zinc-100 outline-none focus:border-brand-lime"
           />
         ) : (
-          <span className="text-zinc-500">
+          <span className="text-zinc-400">
             {files.length > 1 ? "Computed per file from" : "Computed shift:"}{" "}
             <span className="font-medium text-zinc-300">
               {files.length <= 1 && (computedShift > 0 ? `+${computedShift}` : computedShift)}
@@ -454,7 +454,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
           {isPreviewing && <Spinner className="h-3.5 w-3.5" />}
           {isPreviewing ? "Rendering preview…" : "Preview"}
         </button>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-zinc-400">
           Quick sample from the first {files.length > 1 ? "file" : "upload"}, not the full render.
         </span>
       </div>
@@ -472,7 +472,7 @@ export function RetunePanel({ lastRecording, onRecorded }: RetunePanelProps) {
         onClick={handleSubmit}
         disabled={!canSubmit}
         whileTap={canSubmit ? { scale: 0.98 } : undefined}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
       >
         {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning ? "Processing…" : files.length > 1 ? `Retune ${files.length} files` : "Retune"}

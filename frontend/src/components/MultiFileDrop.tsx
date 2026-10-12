@@ -174,12 +174,12 @@ export function MultiFileDrop({
                 className="flex items-center justify-between gap-2 overflow-hidden rounded-lg border border-zinc-700 bg-ink-900 px-3 py-1.5 text-sm text-zinc-300"
               >
                 <span className="truncate">
-                  {f.name} <span className="text-zinc-500">({(f.size / (1024 * 1024)).toFixed(1)} MB)</span>
+                  {f.name} <span className="text-zinc-400">({(f.size / (1024 * 1024)).toFixed(1)} MB)</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => removeFile(i)}
-                  className="shrink-0 rounded p-0.5 text-zinc-500 transition-colors hover:text-red-400"
+                  className="shrink-0 rounded p-0.5 text-zinc-400 transition-colors hover:text-red-400"
                   aria-label={`Remove ${f.name}`}
                 >
                   ✕

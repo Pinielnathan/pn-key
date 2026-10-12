@@ -14,7 +14,7 @@ const STATUS_STYLES: Record<string, string> = {
   planned: "text-sky-300 bg-sky-300/10",
   "in-progress": "text-brand-lime bg-brand-lime/10",
   done: "text-emerald-300 bg-emerald-300/10",
-  declined: "text-zinc-500 bg-white/5",
+  declined: "text-zinc-400 bg-white/5",
 };
 
 function ReplyThread({
@@ -53,7 +53,7 @@ function ReplyThread({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="text-xs font-medium text-zinc-500 transition-colors hover:text-brand-lime"
+        className="text-xs font-medium text-zinc-400 transition-colors hover:text-brand-lime"
       >
         {replies.length > 0
           ? `${replies.length} ${replies.length === 1 ? "reply" : "replies"}`
@@ -324,7 +324,7 @@ export function Suggestions() {
             type="submit"
             disabled={!text.trim() || submitting}
             whileTap={text.trim() && !submitting ? { scale: 0.97 } : undefined}
-            className="flex items-center gap-2 rounded-xl bg-brand-lime px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+            className="flex items-center gap-2 rounded-xl bg-brand-lime px-5 py-2.5 text-sm font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
           >
             {submitting && <Spinner className="h-3.5 w-3.5" />}
             {submitting ? "Posting…" : "Post it"}
@@ -367,7 +367,7 @@ export function Suggestions() {
               type="button"
               onClick={() => setFilter(option)}
               className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                filter === option ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                filter === option ? "bg-white/10 text-zinc-100" : "text-zinc-400 hover:text-zinc-300"
               }`}
             >
               {option === "all" ? `All ${items.length}` : KINDS.find((k) => k.id === option)?.label}
@@ -378,14 +378,14 @@ export function Suggestions() {
       )}
 
       {loading && (
-        <p className="flex items-center justify-center gap-2 text-sm text-zinc-500">
+        <p className="flex items-center justify-center gap-2 text-sm text-zinc-400">
           <Spinner className="h-3.5 w-3.5" />
           Loading the board…
         </p>
       )}
-      {loadError && <p className="text-center text-sm text-zinc-500">{loadError}</p>}
+      {loadError && <p className="text-center text-sm text-zinc-400">{loadError}</p>}
       {!loading && !loadError && shown.length === 0 && (
-        <p className="text-center text-sm text-zinc-500">
+        <p className="text-center text-sm text-zinc-400">
           {items.length === 0 ? "Nothing on the board yet. Be the first to ask for something." : "Nothing of that kind yet."}
         </p>
       )}

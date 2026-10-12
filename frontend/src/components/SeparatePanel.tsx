@@ -118,7 +118,7 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
         onClick={handleSubmit}
         disabled={!canSubmit}
         whileTap={canSubmit ? { scale: 0.98 } : undefined}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-3 font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
       >
         {isRunning && <Spinner className="h-4 w-4" />}
         {isRunning ? "Separating…" : files.length > 1 ? `Separate ${files.length} songs` : "Separate"}
@@ -178,11 +178,11 @@ export function SeparatePanel({ lastRecording, onRecorded }: SeparatePanelProps)
                     />
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Vocals</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Vocals</p>
                         <DownloadButtons jobId={result.jobId} stem="vocals" />
                       </div>
                       <div className="space-y-1.5">
-                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Instrumental</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Instrumental</p>
                         <DownloadButtons jobId={result.jobId} stem="instrumental" />
                       </div>
                     </div>

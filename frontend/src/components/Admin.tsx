@@ -43,7 +43,7 @@ const STATUS_STYLES: Record<string, string> = {
   planned: "text-sky-300 bg-sky-300/10",
   "in-progress": "text-brand-lime bg-brand-lime/10",
   done: "text-emerald-300 bg-emerald-300/10",
-  declined: "text-zinc-500 bg-white/5",
+  declined: "text-zinc-400 bg-white/5",
 };
 
 interface Draft {
@@ -63,7 +63,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-xl border border-white/5 bg-ink-900/60 px-3 py-2.5">
       <p className="text-lg font-bold tabular-nums text-zinc-50">{value}</p>
-      <p className="mt-0.5 text-[11px] text-zinc-500">{label}</p>
+      <p className="mt-0.5 text-[11px] text-zinc-400">{label}</p>
     </div>
   );
 }
@@ -299,7 +299,7 @@ export function Admin() {
 
   if (checking && !authed) {
     return (
-      <p className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500">
+      <p className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-400">
         <Spinner className="h-4 w-4" />
         Checking
       </p>
@@ -311,7 +311,7 @@ export function Admin() {
       <div className="mx-auto max-w-sm space-y-3 rounded-2xl border border-white/5 bg-ink-900/50 p-5">
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">Admin</h2>
-          <p className="mt-1 text-sm text-zinc-500">Approve this browser from Chitemere HQ on your phone.</p>
+          <p className="mt-1 text-sm text-zinc-400">Approve this browser from Chitemere HQ on your phone.</p>
         </div>
         <PhoneSignIn onKey={signedInFromPhone} />
         <label className="flex items-center gap-2 text-xs text-zinc-400">
@@ -326,7 +326,7 @@ export function Admin() {
         <button
           type="button"
           onClick={() => setWithPhone(false)}
-          className="w-full text-center text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+          className="w-full text-center text-xs text-zinc-400 transition-colors hover:text-zinc-300"
         >
           Use the admin key instead
         </button>
@@ -339,7 +339,7 @@ export function Admin() {
       <form onSubmit={signIn} className="mx-auto max-w-sm space-y-3 rounded-2xl border border-white/5 bg-ink-900/50 p-5">
         <div>
           <h2 className="text-lg font-semibold text-zinc-100">Admin</h2>
-          <p className="mt-1 text-sm text-zinc-500">Enter your admin key to manage the board.</p>
+          <p className="mt-1 text-sm text-zinc-400">Enter your admin key to manage the board.</p>
         </div>
         <input
           type="password"
@@ -366,7 +366,7 @@ export function Admin() {
         <button
           type="submit"
           disabled={!key.trim() || checking}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-2.5 text-sm font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-500 disabled:shadow-none"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-lime px-4 py-2.5 text-sm font-semibold text-ink-950 shadow-glow transition-colors hover:bg-brand-limeDark disabled:cursor-not-allowed disabled:bg-ink-700 disabled:text-zinc-400 disabled:shadow-none"
         >
           {checking && <Spinner className="h-3.5 w-3.5" />}
           Sign in
@@ -464,7 +464,7 @@ export function Admin() {
           <option value="newest">Newest</option>
           <option value="replies">Most replies</option>
         </select>
-        <span className="ml-auto text-xs text-zinc-500">
+        <span className="ml-auto text-xs text-zinc-400">
           {visible.length} of {data?.items.length ?? 0}
         </span>
       </div>
@@ -484,7 +484,7 @@ export function Admin() {
           </label>
           {selected.size > 0 && (
             <>
-              <span className="text-zinc-500">{selected.size} selected</span>
+              <span className="text-zinc-400">{selected.size} selected</span>
               <select
                 defaultValue=""
                 onChange={(event) => {
@@ -555,13 +555,13 @@ export function Admin() {
       </AnimatePresence>
 
       {loading && !data && (
-        <p className="flex items-center gap-2 text-sm text-zinc-500">
+        <p className="flex items-center gap-2 text-sm text-zinc-400">
           <Spinner className="h-3.5 w-3.5" />
           Loading
         </p>
       )}
       {data && visible.length === 0 && (
-        <p className="py-8 text-center text-sm text-zinc-500">
+        <p className="py-8 text-center text-sm text-zinc-400">
           {data.items.length === 0 ? "Nothing on the board yet." : "Nothing matches those filters."}
         </p>
       )}
@@ -605,7 +605,7 @@ export function Admin() {
                   </span>
                   <span className="text-sm font-semibold text-zinc-100">{item.name}</span>
                   <span className="text-xs text-zinc-600">{timeAgo(item.created_at)}</span>
-                  <span className="text-xs text-zinc-500">{item.votes} votes</span>
+                  <span className="text-xs text-zinc-400">{item.votes} votes</span>
                   {isDirty && <span className="text-[11px] font-medium text-brand-lime">unsaved</span>}
 
                   <div className="ml-auto flex items-center gap-2">
@@ -671,7 +671,7 @@ export function Admin() {
                         <button
                           type="button"
                           onClick={() => void removeReply(item.id, reply.id)}
-                          className="shrink-0 rounded px-2 py-0.5 text-[11px] text-zinc-500 transition-colors hover:text-red-400"
+                          className="shrink-0 rounded px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:text-red-400"
                         >
                           Remove
                         </button>

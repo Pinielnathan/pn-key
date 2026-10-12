@@ -105,7 +105,7 @@ export function PhoneSignIn({ onKey }: { onKey: (key: string) => void }) {
           <p className="mt-2 text-xs leading-relaxed text-zinc-400">
             Open Chitemere HQ on your phone and scan this, or type the six numbers under Settings, Sign in a web console.
           </p>
-          <p className="mt-1.5 text-xs text-zinc-500">
+          <p className="mt-1.5 text-xs text-zinc-400">
             Waiting for your phone{left ? `, new code in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` : ""}.
           </p>
         </>

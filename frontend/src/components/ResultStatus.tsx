@@ -15,7 +15,7 @@ export function ResultStatus({
 }) {
   if (status === "queued") {
     return (
-      <p className="flex items-center gap-2 text-sm text-zinc-500">
+      <p className="flex items-center gap-2 text-sm text-zinc-400">
         <Spinner className="h-3.5 w-3.5 opacity-50" />
         Queued…
       </p>
